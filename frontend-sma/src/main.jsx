@@ -1,4 +1,4 @@
-// main.jsx (ทางเลือก)
+
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom'
@@ -10,6 +10,7 @@ import Home from './pages/Home'
 import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
 import VerifyEmail from './pages/VerifyEmail'
+import WarrantyDashboard from './pages/WarrantyDashboard'
 
 function Layout(){
   return (
@@ -29,6 +30,8 @@ const router = createBrowserRouter([
       { path: '/signin', element: <SignIn /> },
       { path: '/signup', element: <SignUp /> },
       { path: '/verify-email', element: <VerifyEmail /> },
+       // Dashboard screens have their own in-app headers.
+      { path: '/dashboard/warranty', element: <WarrantyDashboard /> },
     ]
   }
 ])

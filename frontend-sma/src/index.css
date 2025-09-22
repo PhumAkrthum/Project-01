@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
-/* brand tokens */
+
 :root {
-  --brand:#f59e0b; /* amber-500 for CTA */
+  --brand:#f59e0b; 
   --brand-600:#d97706;
 }
 
