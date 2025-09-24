@@ -108,7 +108,7 @@ export default function SignIn() {
     try {
       const { data } = await api.post("/auth/login", payload);
       if (setToken) setToken(data?.token);
-      navigate("/");
+      navigate("/dashboard/warranty", { replace: true });
     } catch (err) {
       alert(err?.response?.data?.message || "เข้าสู่ระบบไม่สำเร็จ");
     } finally {
