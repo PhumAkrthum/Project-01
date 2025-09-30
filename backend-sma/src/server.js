@@ -42,8 +42,8 @@ app.use(cookieParser());
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // เสิร์ฟไฟล์อัปโหลดกลับให้หน้าเว็บ (ฐานเดียวกับ uploadImages.js)
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-
+//app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/', (_req, res) => res.send('SME Email Auth API - Running OK'));
 
 // routes (คง prefix เดิมไว้ทั้งหมด)
