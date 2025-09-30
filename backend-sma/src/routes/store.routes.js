@@ -17,6 +17,8 @@ router.use(requireAuth, requireVerified, requireStore);
 router.get("/:storeId/dashboard", getStoreDashboard);
 router.patch("/:storeId/profile", updateStoreProfile);
 router.post("/:storeId/change-password", changeStorePassword);
+
+// สำคัญ: ตอนนี้ POST นี้รองรับ payload ใหม่ { items: [...] } = สร้างใบเดียวหลายรายการ
 router.post("/:storeId/warranties", createWarranty);
 
 export default router;

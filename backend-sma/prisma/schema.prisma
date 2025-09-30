@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" 
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -21,14 +21,13 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  // one-to-one profiles (optional depending on role)
   customerProfile  CustomerProfile?
   storeProfile     StoreProfile?
 
-  // relations for tokens
   verificationTokens VerificationToken[]
   resetTokens        PasswordResetToken[]
-  warranties         Warranty[]
+
+  warranties        Warranty[]      // ใบรับประกัน (Header) ทั้งหมดของร้านนี้
 }
 
 model CustomerProfile {
@@ -40,6 +39,7 @@ model CustomerProfile {
   phone       String
   isConsent   Boolean @default(false)
 }
+
 model StoreProfile {
   id                  Int      @id @default(autoincrement())
   userId              Int      @unique
@@ -58,9 +58,8 @@ model StoreProfile {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  warranties          Warranty[]
+  
 }
-
 
 model VerificationToken {
   id        Int      @id @default(autoincrement())
@@ -81,13 +80,28 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
   usedAt    DateTime?
 }
+
+
 model Warranty {
+  id            String         @id @default(cuid())
+  storeId       Int
+  store         User           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code          String         @unique
+  customerEmail String?        // เก็บระดับใบ (ใช้ของรายการแรก ถ้า UI แยกก็ได้)
+  customerName  String?
+  customerPhone String?
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  items         WarrantyItem[]
+}
+
+model WarrantyItem {
   id             String   @id @default(cuid())
-  storeId        Int
-  store          User     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  customerName   String?
-  customerEmail  String
-  customerPhone  String?
+  warrantyId     String
+  warranty       Warranty @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+
   productName    String
   serial         String?
   purchaseDate   DateTime
@@ -97,9 +111,8 @@ model Warranty {
   coverageNote   String?
   note           String?
   documents      Json?
-  images         Json?    // เก็บ array ของ image URLs
+  images         Json?     // เก็บ array ของ image URLs
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-
-  StoreProfile StoreProfile[]
 }
