@@ -1,4 +1,4 @@
-// src/pages/SignIn.jsx
+// frontend-sma/src/pages/SignIn.jsx
 import { useEffect, useState } from "react";
 import { Link, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
@@ -26,13 +26,12 @@ const Icon = {
   ),
   eyeOff: (cls = "w-5 h-5") => (
     <svg viewBox="0 0 24 24" className={`${cls} text-gray-400`} fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a21.77 21.77 0 015.06-6.06m4.31-2.2A10.94 10.94 0 0112 5c7 0 11 7 11 7a21.62 21.62 0 01-3.34 4.26M1 1l22 22" />
+      <path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a21.62 21.62 0 01-3.34 4.26M1 1l22 22" />
       <path d="M9.88 9.88A3 3 0 0012 15a3 3 0 002.12-.88" />
     </svg>
   ),
 };
 
-/* ช่องกรอกแบบมีไอคอน */
 function InputIcon({ left, right, className = "", ...props }) {
   return (
     <div className="relative">
@@ -51,7 +50,6 @@ function InputIcon({ left, right, className = "", ...props }) {
   );
 }
 
-/* แท็บแบบในภาพ */
 function Tabs({ value, onChange }) {
   const Btn = ({ val, label, icon }) => {
     const selected = value === val;
@@ -86,13 +84,25 @@ function Tabs({ value, onChange }) {
   );
 }
 
+// helper: ถอด payload จาก JWT เพื่ออ่าน role
+function decodeRoleFromToken(token) {
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(base64);
+    const payload = JSON.parse(json);
+    return payload?.role || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function SignIn() {
   const [params] = useSearchParams();
   const initial = params.get("role") === "store" ? "store" : "customer";
   const [tab, setTab] = useState(initial);
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation(); // << เพิ่ม
+  const location = useLocation();
   const { setToken } = useAuth?.() ?? { setToken: () => {} };
   const [showPwd, setShowPwd] = useState(false);
 
@@ -108,18 +118,42 @@ export default function SignIn() {
     const payload = { email: fd.get("email"), password: fd.get("password") };
     try {
       const { data } = await api.post("/auth/login", payload);
-      if (setToken) setToken(data?.token);
-      // << เพิ่ม: redirect ไปหน้าที่มาก่อนหรือไปแดชบอร์ด
-      const redirectTo = location.state?.from?.pathname || "/dashboard/warranty";
+      const token = data?.token;
+      if (!token) {
+        alert("เข้าสู่ระบบไม่สำเร็จ: ไม่พบโทเคน");
+        setSubmitting(false);
+        return;
+      }
+
+      // ✅ เก็บ token และตั้ง header ให้ทุกคำขอถัดไป
+      localStorage.setItem("token", token);
+      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      if (setToken) setToken(token);
+
+      // ถ้ามีเส้นทางจากหน้าเดิม ให้กลับไปที่นั่นก่อน
+      let redirectTo = location.state?.from?.pathname || null;
+
+      // ถ้าไม่มี ให้ใช้ role จาก JWT ตัดสินใจปลายทาง
+      if (!redirectTo) {
+        const role = decodeRoleFromToken(token);
+        redirectTo = role === "STORE" ? "/dashboard/warranty" : "/";
+      }
+
       navigate(redirectTo, { replace: true });
     } catch (err) {
-      // << ปรับ: ข้อความ error ที่ครอบคลุมขึ้น
-      const message =
-        err?.response?.data?.error?.message ||
-        err?.response?.data?.message ||
-        err?.message ||
-        "เข้าสู่ระบบไม่สำเร็จ";
-      alert(message);
+      const status = err?.response?.status;
+      const body = err?.response?.data || {};
+      // ถ้ายังไม่ verify -> ส่งไปหน้า verify email
+      if (status === 403 && body?.needsVerify) {
+        const verifyUrl = body?.verifyUrl; // dev mode อาจมี
+        const q = new URLSearchParams();
+        q.set("email", payload.email || "");
+        if (verifyUrl) q.set("preview", verifyUrl);
+        navigate(`/verify-email?${q.toString()}`, { replace: true });
+        setSubmitting(false);
+        return;
+      }
+      alert(body?.message || err?.message || "เข้าสู่ระบบไม่สำเร็จ");
     } finally {
       setSubmitting(false);
     }
