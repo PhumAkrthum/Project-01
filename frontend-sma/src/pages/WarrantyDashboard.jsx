@@ -1,3 +1,4 @@
+// frontend-sma/src/pages/WarrantyDashboard.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -60,10 +61,15 @@ export default function WarrantyDashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  const storeId = useMemo(() => {
+  // ✅ หาค่า storeId ให้ถูกต้อง (ลองหลายฟิลด์เผื่อ backend ส่งไม่เหมือนกัน)
+  const storeIdResolved = useMemo(() => {
     if (!user) return null
-    if (user.id) return user.id
-    return null
+    return (
+      user.storeProfile?.id ||
+      user.store?.id ||
+      user.storeId ||
+      null
+    )
   }, [user])
 
   const [warranties, setWarranties] = useState([])
@@ -143,7 +149,6 @@ export default function WarrantyDashboard() {
   const handleProfileAvatarSelect = (event) => {
     const file = event.target.files?.[0]
     if (!file) return
-
     const reader = new FileReader()
     reader.onloadend = () => {
       if (typeof reader.result === 'string') {
@@ -155,14 +160,14 @@ export default function WarrantyDashboard() {
   }
 
   const fetchDashboard = useCallback(async () => {
-    if (!storeId) {
+    if (!storeIdResolved) {
       setDashboardLoading(false)
       return
     }
     setDashboardError('')
     setDashboardLoading(true)
     try {
-      const response = await api.get(`/store/${storeId}/dashboard`)
+      const response = await api.get(`/store/${storeIdResolved}/dashboard`)
       const payload = response.data?.data ?? {}
 
       if (payload.storeProfile) {
@@ -205,7 +210,7 @@ export default function WarrantyDashboard() {
     } finally {
       setDashboardLoading(false)
     }
-  }, [storeId])
+  }, [storeIdResolved])
 
   const openWarrantyModal = (mode, warranty) => {
     setModalMode(mode)
@@ -222,7 +227,7 @@ export default function WarrantyDashboard() {
 
   const handleProfileSubmit = async (event) => {
     event.preventDefault()
-    if (!storeId) return
+    if (!storeIdResolved) return
     setProfileSubmitting(true)
     setModalError('')
     try {
@@ -235,7 +240,7 @@ export default function WarrantyDashboard() {
         businessHours: storeProfile.businessHours,
         avatarUrl: storeProfile.avatarUrl,
       }
-      const response = await api.patch(`/store/${storeId}/profile`, payload)
+      const response = await api.patch(`/store/${storeIdResolved}/profile`, payload)
       const updatedProfile = response.data?.data?.storeProfile ?? payload
       setStoreProfile((prev) => ({ ...prev, ...updatedProfile }))
       setProfileImage({ file: null, preview: '' })
@@ -250,7 +255,7 @@ export default function WarrantyDashboard() {
 
   const handlePasswordSubmit = async (event) => {
     event.preventDefault()
-    if (!storeId) return
+    if (!storeIdResolved) return
     if (profilePasswords.newPassword !== profilePasswords.confirmPassword) {
       setModalError('รหัสผ่านใหม่และการยืนยันไม่ตรงกัน')
       return
@@ -258,7 +263,7 @@ export default function WarrantyDashboard() {
     setPasswordSubmitting(true)
     setModalError('')
     try {
-      await api.post(`/store/${storeId}/change-password`, {
+      await api.post(`/store/${storeIdResolved}/change-password`, {
         old_password: profilePasswords.currentPassword,
         new_password: profilePasswords.newPassword,
       })
@@ -280,7 +285,7 @@ export default function WarrantyDashboard() {
 
   const handleWarrantySubmit = async (event) => {
     event.preventDefault()
-    if (!storeId) return
+    if (!storeIdResolved) return
     setWarrantySubmitting(true)
     setWarrantyModalError('')
 
@@ -306,17 +311,13 @@ export default function WarrantyDashboard() {
 
     try {
       if (modalMode === 'create') {
-        const response = await api.post(`/store/${storeId}/warranties`, payload)
+        const response = await api.post(`/store/${storeIdResolved}/warranties`, payload)
         const created = response.data?.data?.warranty
-        if (created) {
-          setWarranties((prev) => [created, ...prev])
-        }
+        if (created) setWarranties((prev) => [created, ...prev])
       } else if (selectedWarranty) {
         const response = await api.patch(`/warranties/${selectedWarranty.id}`, payload)
         const updated = response.data?.data?.warranty
-        if (updated) {
-          setWarranties((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
-        }
+        if (updated) setWarranties((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
       }
       setWarrantyModalOpen(false)
     } catch (error) {
@@ -334,7 +335,7 @@ export default function WarrantyDashboard() {
       const blob = new Blob([response.data], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank', 'noopener')
-      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
     } catch (error) {
       setDashboardError(error?.response?.data?.error?.message || 'ไม่สามารถดาวน์โหลดใบรับประกันได้')
     } finally {
@@ -344,23 +345,15 @@ export default function WarrantyDashboard() {
 
   const handleImageUpload = async (files) => {
     if (!selectedWarranty?.id) return
-
     const formData = new FormData()
-    files.forEach(file => {
-      formData.append('images', file)
-    })
-
+    files.forEach(file => formData.append('images', file))
     try {
       const response = await api.post(`/warranties/${selectedWarranty.id}/images`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+        headers: { 'Content-Type': 'multipart/form-data' }
       })
-
       const updatedWarranty = response.data?.data?.warranty
       if (updatedWarranty) {
         setWarrantyImages(updatedWarranty.images || [])
-        // อัปเดต warranties list
         setWarranties(prev => prev.map(w => w.id === updatedWarranty.id ? updatedWarranty : w))
       }
     } catch (error) {
@@ -370,14 +363,11 @@ export default function WarrantyDashboard() {
 
   const handleImageDelete = async (imageId) => {
     if (!selectedWarranty?.id) return
-
     try {
       const response = await api.delete(`/warranties/${selectedWarranty.id}/images/${imageId}`)
-      
       const updatedWarranty = response.data?.data?.warranty
       if (updatedWarranty) {
         setWarrantyImages(updatedWarranty.images || [])
-        // อัปเดต warranties list
         setWarranties(prev => prev.map(w => w.id === updatedWarranty.id ? updatedWarranty : w))
       }
     } catch (error) {
@@ -409,11 +399,7 @@ export default function WarrantyDashboard() {
               className="flex items-center gap-3 rounded-full bg-white px-3 py-2 shadow ring-1 ring-black/10 hover:bg-gray-50"
             >
               {profileAvatarSrc ? (
-                <img
-                  src={profileAvatarSrc}
-                  alt="Store profile"
-                  className="h-10 w-10 rounded-full object-cover"
-                />
+                <img src={profileAvatarSrc} alt="Store profile" className="h-10 w-10 rounded-full object-cover" />
               ) : (
                 <div className="grid h-10 w-10 place-items-center rounded-full bg-amber-300 text-xl">🏪</div>
               )}
@@ -427,11 +413,7 @@ export default function WarrantyDashboard() {
               <div className="absolute right-4 top-16 w-60 rounded-2xl bg-white p-4 text-sm shadow-xl ring-1 ring-black/5">
                 <div className="mb-4 flex items-center gap-3">
                   {profileAvatarSrc ? (
-                    <img
-                      src={profileAvatarSrc}
-                      alt="Store profile"
-                      className="h-12 w-12 rounded-full object-cover"
-                    />
+                    <img src={profileAvatarSrc} alt="Store profile" className="h-12 w-12 rounded-full object-cover" />
                   ) : (
                     <div className="grid h-12 w-12 place-items-center rounded-full bg-amber-200 text-2xl">🏪</div>
                   )}
@@ -484,10 +466,11 @@ export default function WarrantyDashboard() {
             </div>
           </div>
         )}
+
         <div className="rounded-3xl border border-sky-100 bg-gradient-to-b from-white to-sky-50 p-6 shadow-xl">
           {dashboardLoading ? (
             <div className="grid min-h-[320px] place-items-center text-sm text-gray-500">กำลังโหลดข้อมูล...</div>
-          ) : !storeId ? (
+          ) : !storeIdResolved ? (
             <div className="grid min-h-[320px] place-items-center text-center text-sm text-gray-500">
               <div>
                 <div className="text-base font-medium text-gray-700">หน้านี้สำหรับบัญชีร้านค้าเท่านั้น</div>
@@ -560,21 +543,16 @@ export default function WarrantyDashboard() {
                         <div>เบอร์โทรศัพท์: <span className="font-medium text-gray-900">{primaryWarranty?.customerPhone || '-'}</span></div>
                         <div>อีเมลลูกค้า: <span className="font-medium text-gray-900">{primaryWarranty?.customerEmail || '-'}</span></div>
                       </div>
-                      
-                      {/* แสดงรูปภาพใน Warranty Card */}
+
                       {primaryWarranty?.images && primaryWarranty.images.length > 0 && (
                         <div className="mt-3">
                           <div className="text-xs text-gray-600 mb-2">รูปภาพประกอบ</div>
                           <div className="flex gap-2">
                             {primaryWarranty.images.slice(0, 3).map((image, index) => (
-                              <div 
-                                key={image.id} 
+                              <div
+                                key={image.id}
                                 className="group relative h-12 w-12 cursor-pointer overflow-hidden rounded-lg"
-                                onClick={() => setImagePreview({ 
-                                  open: true, 
-                                  images: primaryWarranty.images, 
-                                  index 
-                                })}
+                                onClick={() => setImagePreview({ open: true, images: primaryWarranty.images, index })}
                               >
                                 <img
                                   src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${image.url}`}
@@ -585,13 +563,9 @@ export default function WarrantyDashboard() {
                               </div>
                             ))}
                             {primaryWarranty.images.length > 3 && (
-                              <div 
+                              <div
                                 className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-lg bg-gray-200 text-xs text-gray-600 hover:bg-gray-300"
-                                onClick={() => setImagePreview({ 
-                                  open: true, 
-                                  images: primaryWarranty.images, 
-                                  index: 3 
-                                })}
+                                onClick={() => setImagePreview({ open: true, images: primaryWarranty.images, index: 3 })}
                               >
                                 +{primaryWarranty.images.length - 3}
                               </div>
@@ -600,16 +574,14 @@ export default function WarrantyDashboard() {
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="flex flex-col items-end gap-2">
                       <button
                         type="button"
                         onClick={() => primaryWarranty && handleDownloadPdf(primaryWarranty.id)}
                         disabled={!primaryWarranty || downloadingPdfId === primaryWarranty?.id}
                         className={`h-10 min-w-[96px] rounded-full bg-sky-500 px-5 text-sm font-medium text-white shadow transition ${
-                          !primaryWarranty || downloadingPdfId === primaryWarranty?.id
-                            ? 'cursor-not-allowed opacity-70'
-                            : 'hover:bg-sky-400'
+                          !primaryWarranty || downloadingPdfId === primaryWarranty?.id ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-400'
                         }`}
                       >
                         {downloadingPdfId === primaryWarranty?.id ? 'กำลังดาวน์โหลด…' : 'PDF'}
@@ -637,10 +609,7 @@ export default function WarrantyDashboard() {
                 {showWarrantyDetails &&
                   (filteredWarranties.length > 0 ? (
                     filteredWarranties.map((warranty) => (
-                      <div
-                        key={warranty.id}
-                        className="flex flex-col justify-between gap-6 rounded-3xl bg-white p-6 shadow ring-1 ring-black/5 md:flex-row"
-                      >
+                      <div key={warranty.id} className="flex flex-col justify-between gap-6 rounded-3xl bg-white p-6 shadow ring-1 ring-black/5 md:flex-row">
                         <div className="flex-1 space-y-3">
                           <div className="flex flex-wrap items-center gap-3">
                             <div className="text-lg font-semibold text-gray-900">{warranty.productName}</div>
@@ -656,8 +625,7 @@ export default function WarrantyDashboard() {
                             <div>จำนวนวันคงเหลือ: <span className="font-medium text-gray-900">{warranty.daysLeft ?? 0} วัน</span></div>
                           </div>
                           <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-800">{warranty.coverageNote || '-'}</p>
-                          
-                          {/* แสดงรูปภาพ */}
+
                           {warranty.images && warranty.images.length > 0 && (
                             <div className="space-y-2">
                               <div className="text-sm font-medium text-gray-700">รูปภาพประกอบ</div>
@@ -668,16 +636,9 @@ export default function WarrantyDashboard() {
                                       src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${image.url}`}
                                       alt={image.originalName || 'Warranty image'}
                                       className="h-20 w-20 rounded-lg object-cover transition-transform group-hover:scale-105"
-                                      onClick={() => setImagePreview({ 
-                                        open: true, 
-                                        images: warranty.images, 
-                                        index 
-                                      })}
-                                      onError={(e) => {
-                                        e.target.style.display = 'none';
-                                      }}
+                                      onClick={() => setImagePreview({ open: true, images: warranty.images, index })}
+                                      onError={(e) => { e.currentTarget.style.display = 'none' }}
                                     />
-                                    {/* Preview Overlay */}
                                     <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                                       <span className="text-xs text-white">👁️</span>
                                     </div>
@@ -689,29 +650,22 @@ export default function WarrantyDashboard() {
                         </div>
 
                         <div className="grid place-items-center gap-4">
-                          {/* Image Preview Box */}
                           <div className="relative h-32 w-40 overflow-hidden rounded-2xl border border-gray-300 bg-gray-50">
                             {warranty.images && warranty.images.length > 0 ? (
-                              <div 
+                              <div
                                 className="group relative h-full w-full cursor-pointer"
-                                onClick={() => setImagePreview({ 
-                                  open: true, 
-                                  images: warranty.images, 
-                                  index: 0 
-                                })}
+                                onClick={() => setImagePreview({ open: true, images: warranty.images, index: 0 })}
                               >
                                 <img
                                   src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${warranty.images[0].url}`}
                                   alt="Warranty preview"
                                   className="h-full w-full object-cover transition-transform group-hover:scale-105"
                                 />
-                                {/* Image Count Badge */}
                                 {warranty.images.length > 1 && (
                                   <div className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-1 text-xs text-white">
                                     +{warranty.images.length - 1}
                                   </div>
                                 )}
-                                {/* Preview Overlay */}
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                                   <span className="text-white">👁️ ดูรูป</span>
                                 </div>
@@ -725,7 +679,7 @@ export default function WarrantyDashboard() {
                               </div>
                             )}
                           </div>
-                          
+
                           <button
                             type="button"
                             onClick={() => openWarrantyModal('edit', warranty)}
@@ -752,13 +706,9 @@ export default function WarrantyDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-lg rounded-3xl border border-amber-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-amber-100 px-6 py-4">
-            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
                 {profileAvatarSrc ? (
-                  <img
-                    src={profileAvatarSrc}
-                    alt="Store profile"
-                    className="h-12 w-12 rounded-full object-cover"
-                  />
+                  <img src={profileAvatarSrc} alt="Store profile" className="h-12 w-12 rounded-full object-cover" />
                 ) : (
                   <div className="grid h-12 w-12 place-items-center rounded-full bg-amber-200 text-2xl">🏪</div>
                 )}
@@ -780,50 +730,32 @@ export default function WarrantyDashboard() {
                 ×
               </button>
             </div>
+
             <div className="px-6 pt-4">
               <div className="mb-4 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setProfileTab('info')
-                    setModalError('')
-                  }}
-                  className={`flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${
-                    profileTab === 'info' ? 'bg-amber-100 text-amber-700' : 'bg-amber-50 text-gray-500'
-                  }`}
+                  onClick={() => { setProfileTab('info'); setModalError('') }}
+                  className={`flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${profileTab === 'info' ? 'bg-amber-100 text-amber-700' : 'bg-amber-50 text-gray-500'}`}
                 >
                   ข้อมูลร้านค้า
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setProfileTab('password')
-                    setModalError('')
-                  }}
-                  className={`flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${
-                    profileTab === 'password' ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-50 text-gray-500'
-                  }`}
+                  onClick={() => { setProfileTab('password'); setModalError('') }}
+                  className={`flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${profileTab === 'password' ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-50 text-gray-500'}`}
                 >
                   เปลี่ยนรหัสผ่าน
                 </button>
               </div>
             </div>
+
             {profileTab === 'info' ? (
               <form onSubmit={handleProfileSubmit} className="px-6 pb-6">
-                <input
-                  ref={profileImageInputRef}
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleProfileAvatarSelect}
-                  type="file"
-                />
+                <input ref={profileImageInputRef} accept="image/*" className="hidden" onChange={handleProfileAvatarSelect} type="file" />
                 <div className="mb-4 flex items-center gap-4">
                   {profileAvatarSrc ? (
-                    <img
-                      src={profileAvatarSrc}
-                      alt="Store profile"
-                      className="h-16 w-16 rounded-full object-cover"
-                    />
+                    <img src={profileAvatarSrc} alt="Store profile" className="h-16 w-16 rounded-full object-cover" />
                   ) : (
                     <div className="grid h-16 w-16 place-items-center rounded-full bg-amber-200 text-3xl">🏪</div>
                   )}
@@ -854,8 +786,8 @@ export default function WarrantyDashboard() {
                       {label}
                       <input
                         required
-                        value={storeProfile[key]}
-                        onChange={(event) => setStoreProfile((prev) => ({ ...prev, [key]: event.target.value }))}
+                        value={storeProfile[key] ?? ''}
+                        onChange={(e) => setStoreProfile((prev) => ({ ...prev, [key]: e.target.value }))}
                         className="mt-1 w-full rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-2 text-sm text-gray-900 focus:border-amber-300 focus:outline-none"
                         type="text"
                       />
@@ -890,7 +822,7 @@ export default function WarrantyDashboard() {
                       <input
                         required
                         value={profilePasswords[key]}
-                        onChange={(event) => setProfilePasswords((prev) => ({ ...prev, [key]: event.target.value }))}
+                        onChange={(e) => setProfilePasswords((prev) => ({ ...prev, [key]: e.target.value }))}
                         className="mt-1 w-full rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-2 text-sm text-gray-900 focus:border-emerald-300 focus:outline-none"
                         type="password"
                       />
@@ -924,20 +856,18 @@ export default function WarrantyDashboard() {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setWarrantyModalOpen(false)
-                  setWarrantyModalError('')
-                  setWarrantySubmitting(false)
-                }}
+                onClick={() => { setWarrantyModalOpen(false); setWarrantyModalError(''); setWarrantySubmitting(false) }}
                 className="text-2xl text-white/80 hover:text-white"
               >
                 ×
               </button>
             </div>
+
             <form className="grid gap-3 px-6 pb-6 pt-5" onSubmit={handleWarrantySubmit}>
               {warrantyModalError && (
                 <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{warrantyModalError}</div>
               )}
+
               <label className="text-sm text-gray-600">
                 อีเมลลูกค้า
                 <input
@@ -949,6 +879,7 @@ export default function WarrantyDashboard() {
                   required
                 />
               </label>
+
               <label className="text-sm text-gray-600">
                 ชื่อสินค้า
                 <input
@@ -960,6 +891,7 @@ export default function WarrantyDashboard() {
                   required
                 />
               </label>
+
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="text-sm text-gray-600">
                   ระยะเวลา (เดือน)
@@ -972,13 +904,12 @@ export default function WarrantyDashboard() {
                     }
                     className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                   >
-                    {[6, 12, 18, 24].map((month) => (
-                      <option key={month} value={month}>
-                        {month} เดือน
-                      </option>
+                    {[6, 12, 18, 24].map(month => (
+                      <option key={month} value={month}>{month} เดือน</option>
                     ))}
                   </select>
                 </label>
+
                 <label className="text-sm text-gray-600">
                   Serial No.
                   <input
@@ -991,6 +922,7 @@ export default function WarrantyDashboard() {
                   />
                 </label>
               </div>
+
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="text-sm text-gray-600">
                   วันเริ่ม
@@ -1012,6 +944,7 @@ export default function WarrantyDashboard() {
                   />
                 </label>
               </div>
+
               <label className="text-sm text-gray-600">
                 เงื่อนไขการรับประกัน
                 <textarea
@@ -1022,8 +955,7 @@ export default function WarrantyDashboard() {
                   required
                 />
               </label>
-              
-              {/* Image Upload Section - แสดงเฉพาะเมื่อแก้ไข */}
+
               {modalMode === 'edit' && selectedWarranty && (
                 <div className="space-y-2">
                   <label className="text-sm text-gray-600">รูปภาพประกอบ</label>
@@ -1036,20 +968,7 @@ export default function WarrantyDashboard() {
                   />
                 </div>
               )}
-              <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
-                <button
-                  type="button"
-                  className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-500 shadow ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  + เพิ่มสินค้า
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-500 shadow ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  ค้นหาสินค้า
-                </button>
-              </div>
+
               <div className="mt-4 flex justify-end">
                 <button
                   type="submit"
@@ -1066,7 +985,6 @@ export default function WarrantyDashboard() {
         </div>
       )}
 
-      {/* Image Preview Modal */}
       {imagePreview.open && (
         <ImagePreview
           images={imagePreview.images}

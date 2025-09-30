@@ -101,6 +101,7 @@ export default function SignIn() {
   const initial = params.get("role") === "store" ? "store" : "customer";
   const [tab, setTab] = useState(initial);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
   const { setToken } = useAuth?.() ?? { setToken: () => {} };
@@ -114,28 +115,40 @@ export default function SignIn() {
   async function onSubmit(e) {
     e.preventDefault();
     setSubmitting(true);
+    setError("");
     const fd = new FormData(e.currentTarget);
     const payload = { email: fd.get("email"), password: fd.get("password") };
     try {
       const { data } = await api.post("/auth/login", payload);
       const token = data?.token;
       if (!token) {
-        alert("เข้าสู่ระบบไม่สำเร็จ: ไม่พบโทเคน");
+        setError("เข้าสู่ระบบไม่สำเร็จ: ไม่พบโทเคน");
         setSubmitting(false);
         return;
       }
 
-      // ✅ เก็บ token และตั้ง header ให้ทุกคำขอถัดไป
+      // เก็บ token และตั้ง header ให้ทุกคำขอถัดไป
       localStorage.setItem("token", token);
       api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       if (setToken) setToken(token);
 
+      // ✅ บังคับแยกฝั่ง: role ที่ JWT vs แท็บที่ผู้ใช้เลือก
+      const role = decodeRoleFromToken(token); // เช่น "STORE" หรือ "CUSTOMER"
+      const expected = tab === "store" ? "STORE" : "CUSTOMER";
+      if (role !== expected) {
+        // เคลียร์ token และแจ้งว่าไม่พบบัญชีทางฝั่งนี้
+        localStorage.removeItem("token");
+        delete api.defaults.headers.common["Authorization"];
+        setError("ไม่พบบัญชีทางฝั่งนี้ (บัญชีนี้เป็นของอีกฝั่ง)");
+        setSubmitting(false);
+        return;
+      }
+
       // ถ้ามีเส้นทางจากหน้าเดิม ให้กลับไปที่นั่นก่อน
       let redirectTo = location.state?.from?.pathname || null;
 
-      // ถ้าไม่มี ให้ใช้ role จาก JWT ตัดสินใจปลายทาง
+      // ถ้าไม่มี ให้พาไปตาม role
       if (!redirectTo) {
-        const role = decodeRoleFromToken(token);
         redirectTo = role === "STORE" ? "/dashboard/warranty" : "/";
       }
 
@@ -143,6 +156,7 @@ export default function SignIn() {
     } catch (err) {
       const status = err?.response?.status;
       const body = err?.response?.data || {};
+
       // ถ้ายังไม่ verify -> ส่งไปหน้า verify email
       if (status === 403 && body?.needsVerify) {
         const verifyUrl = body?.verifyUrl; // dev mode อาจมี
@@ -153,7 +167,7 @@ export default function SignIn() {
         setSubmitting(false);
         return;
       }
-      alert(body?.message || err?.message || "เข้าสู่ระบบไม่สำเร็จ");
+      setError(body?.message || err?.message || "เข้าสู่ระบบไม่สำเร็จ");
     } finally {
       setSubmitting(false);
     }
@@ -172,10 +186,16 @@ export default function SignIn() {
             </div>
             <h1 className="mt-4 text-2xl font-extrabold text-gray-900">เข้าสู่ระบบ</h1>
             <p className="text-gray-600 text-sm">เลือกประเภทบัญชีของคุณ</p>
-            <div className="mt-4"><Tabs value={tab} onChange={setTab} /></div>
+            <div className="mt-4"><Tabs value={tab} onChange={(v)=>{ setError(""); setTab(v); }} /></div>
           </div>
 
-          <form onSubmit={onSubmit} className="mt-6 space-y-4">
+          {error ? (
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {error}
+            </div>
+          ) : null}
+
+          <form onSubmit={onSubmit} className="mt-4 space-y-4">
             <label className="block">
               <span className="block text-sm font-medium text-gray-700">อีเมล</span>
               <InputIcon
