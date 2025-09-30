@@ -29,7 +29,7 @@ export async function getTransport() {
     cachedTransport = nodemailer.createTransport({
       host,
       port,
-      secure: port === 465, // 465 ใช้ SSL
+      secure: port === 465, 
       auth: { user, pass },
     });
 

@@ -1,7 +1,7 @@
 import { getTransport } from "../config/mail.js";
 
 function getFrom() {
-  // ใช้ SMTP_FROM ถ้ากำหนดไว้; ไม่งั้น fallback เป็นบัญชีที่ล็อกอิน SMTP (ปลอดภัยสุดสำหรับ Gmail)
+  
   const envFrom = process.env.SMTP_FROM;
   const user = process.env.NODEMAILER_USER;
   if (envFrom && envFrom.trim()) return envFrom;

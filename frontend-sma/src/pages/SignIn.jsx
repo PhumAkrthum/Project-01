@@ -1,6 +1,6 @@
 // src/pages/SignIn.jsx
 import { useEffect, useState } from "react";
-import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { Link, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../store/auth";
 
@@ -92,6 +92,7 @@ export default function SignIn() {
   const [tab, setTab] = useState(initial);
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation(); // << เพิ่ม
   const { setToken } = useAuth?.() ?? { setToken: () => {} };
   const [showPwd, setShowPwd] = useState(false);
 
@@ -108,9 +109,17 @@ export default function SignIn() {
     try {
       const { data } = await api.post("/auth/login", payload);
       if (setToken) setToken(data?.token);
-      navigate("/dashboard/warranty", { replace: true });
+      // << เพิ่ม: redirect ไปหน้าที่มาก่อนหรือไปแดชบอร์ด
+      const redirectTo = location.state?.from?.pathname || "/dashboard/warranty";
+      navigate(redirectTo, { replace: true });
     } catch (err) {
-      alert(err?.response?.data?.message || "เข้าสู่ระบบไม่สำเร็จ");
+      // << ปรับ: ข้อความ error ที่ครอบคลุมขึ้น
+      const message =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        "เข้าสู่ระบบไม่สำเร็จ";
+      alert(message);
     } finally {
       setSubmitting(false);
     }

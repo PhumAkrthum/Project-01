@@ -1,52 +1,34 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { api } from '../lib/api'
+import { useAuth } from '../store/auth'
+import ImageUpload from '../components/ImageUpload'
+import ImagePreview from '../components/ImagePreview'
 
-const mockWarranties = [
-  {
-    id: 'WR001',
-    productName: 'iPhone 16 Pro',
-    status: 'ใช้งานได้',
-    statusTag: 'ใช้งานได้',
-    statusColor: 'bg-emerald-100 text-emerald-700',
-    serial: 'SN-0000001',
-    customerName: 'คุณญญ่า สรรพสินค้า',
-    customerEmail: 'natthanan@gmail.com',
-    purchaseDate: '3/8/2568',
-    expiryDate: '3/9/2569',
-    coverageNote: 'รับประกันร้านอีกรอบ 1 ปี รวมหน้าจอ',
-    daysLeft: 30,
-    matchedCard: 'WR001',
-  },
-  {
-    id: 'WR002',
-    productName: 'iPhone 15 Pro',
-    status: 'ใกล้หมดอายุ',
-    statusTag: 'ใกล้หมดอายุ',
-    statusColor: 'bg-amber-100 text-amber-700',
-    serial: 'SN-0000002',
-    customerName: 'คุณปอนด์ สมาร์ทโฟน',
-    customerEmail: 'natthanan@gmail.com',
-    purchaseDate: '3/8/2568',
-    expiryDate: '3/9/2569',
-    coverageNote: 'รับประกันร้านอีก 1 ปี รวมหน้าจอ',
-    daysLeft: 7,
-    matchedCard: 'WR001',
-  },
-  {
-    id: 'WR003',
-    productName: 'iPhone 14 Pro',
-    status: 'หมดอายุ',
-    statusTag: 'หมดอายุ',
-    statusColor: 'bg-rose-100 text-rose-700',
-    serial: 'SN-0000003',
-    customerName: 'คุณณัฐวุฒิ คอมพิวเตอร์',
-    customerEmail: 'natthanan@gmail.com',
-    purchaseDate: '3/5/2567',
-    expiryDate: '3/6/2568',
-    coverageNote: 'หมดอายุแล้ว ไม่ครอบคลุมความเสียหาย',
-    daysLeft: 0,
-    matchedCard: 'WR002',
-  },
+const defaultFilters = [
+  { value: 'all', label: 'ทั้งหมด' },
+  { value: 'active', label: 'ใช้งานได้' },
+  { value: 'nearing_expiration', label: 'ใกล้หมดอายุ' },
+  { value: 'expired', label: 'หมดอายุ' },
 ]
+
+const initialStoreProfile = {
+  storeName: '',
+  contactName: '',
+  email: '',
+  phone: '',
+  address: '',
+  businessHours: '',
+  avatarUrl: '',
+  storeType: '',
+  notifyDaysInAdvance: 14,
+}
+
+const STATUS_CODE_BY_LABEL = {
+  'ใช้งานได้': 'active',
+  'ใกล้หมดอายุ': 'nearing_expiration',
+  'หมดอายุ': 'expired',
+}
 
 function StatusBadge({ label, className }) {
   return (
@@ -75,10 +57,21 @@ function SectionTitle({ children }) {
 }
 
 export default function WarrantyDashboard() {
-  // TODO: Replace mock data with GET /warranties response.
-  const [warranties] = useState(() => mockWarranties)
-  const [activeFilter, setActiveFilter] = useState('ทั้งหมด')
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+
+  const storeId = useMemo(() => {
+    if (!user) return null
+    if (user.id) return user.id
+    return null
+  }, [user])
+
+  const [warranties, setWarranties] = useState([])
+  const [filters, setFilters] = useState(defaultFilters)
+  const [activeFilter, setActiveFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [dashboardLoading, setDashboardLoading] = useState(true)
+  const [dashboardError, setDashboardError] = useState('')
 
   const [isProfileMenuOpen, setProfileMenuOpen] = useState(false)
   const [isProfileModalOpen, setProfileModalOpen] = useState(false)
@@ -86,27 +79,26 @@ export default function WarrantyDashboard() {
   const profileMenuRef = useRef(null)
   const profileImageInputRef = useRef(null)
 
-  // TODO: Replace with GET /profile.
-  const [storeProfile, setStoreProfile] = useState({
-    storeName: 'ร้านบัดดี้ดี',
-    contactName: 'ธนนท์ ไชย',
-    email: 'customer@example.com',
-    phone: '02-123-4567',
-    address: '123 ถนนสุขุมวิทย์ กรุงเทพฯ',
-    businessHours: '9:00-18:00 จันทร์ - ศุกร์',
-    avatarUrl: '',
-  })
+  const [storeProfile, setStoreProfile] = useState(initialStoreProfile)
   const [profileImage, setProfileImage] = useState({ file: null, preview: '' })
   const [profilePasswords, setProfilePasswords] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   })
+  const [modalError, setModalError] = useState('')
+  const [profileSubmitting, setProfileSubmitting] = useState(false)
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false)
 
   const [isWarrantyModalOpen, setWarrantyModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState('create')
   const [selectedWarranty, setSelectedWarranty] = useState(null)
   const [showWarrantyDetails, setShowWarrantyDetails] = useState(false)
+  const [warrantySubmitting, setWarrantySubmitting] = useState(false)
+  const [warrantyModalError, setWarrantyModalError] = useState('')
+  const [downloadingPdfId, setDownloadingPdfId] = useState(null)
+  const [warrantyImages, setWarrantyImages] = useState([])
+  const [imagePreview, setImagePreview] = useState({ open: false, images: [], index: 0 })
 
   const profileAvatarSrc = profileImage.preview || storeProfile.avatarUrl || ''
 
@@ -123,10 +115,16 @@ export default function WarrantyDashboard() {
 
   const filteredWarranties = useMemo(() => {
     return warranties.filter((item) => {
-      const matchFilter = activeFilter === 'ทั้งหมด' ? true : item.status === activeFilter
+      const statusCode = item.statusCode
+        || STATUS_CODE_BY_LABEL[item.statusTag]
+        || STATUS_CODE_BY_LABEL[item.status]
+        || 'unknown'
+      const matchFilter = activeFilter === 'all' ? true : statusCode === activeFilter
       const normalizedTerm = searchTerm.trim().toLowerCase()
       const matchSearch = normalizedTerm
-        ? [item.productName, item.serial, item.id].some((text) => text.toLowerCase().includes(normalizedTerm))
+        ? [item.productName, item.serial, item.id, item.customerName, item.customerEmail]
+            .map((text) => String(text || '').toLowerCase())
+            .some((text) => text.includes(normalizedTerm))
         : true
       return matchFilter && matchSearch
     })
@@ -136,6 +134,10 @@ export default function WarrantyDashboard() {
     setProfileModalOpen(true)
     setProfileTab('info')
     setProfileMenuOpen(false)
+    setModalError('')
+    setProfileSubmitting(false)
+    setPasswordSubmitting(false)
+    setProfilePasswords({ currentPassword: '', newPassword: '', confirmPassword: '' })
   }
 
   const handleProfileAvatarSelect = (event) => {
@@ -152,37 +154,240 @@ export default function WarrantyDashboard() {
     reader.readAsDataURL(file)
   }
 
+  const fetchDashboard = useCallback(async () => {
+    if (!storeId) {
+      setDashboardLoading(false)
+      return
+    }
+    setDashboardError('')
+    setDashboardLoading(true)
+    try {
+      const response = await api.get(`/store/${storeId}/dashboard`)
+      const payload = response.data?.data ?? {}
+
+      if (payload.storeProfile) {
+        setStoreProfile({ ...initialStoreProfile, ...payload.storeProfile })
+        setProfileImage({ file: null, preview: '' })
+      }
+
+      if (Array.isArray(payload.warranties)) {
+        setWarranties(payload.warranties)
+      } else {
+        setWarranties([])
+      }
+
+      const fetchedStatuses = Array.isArray(payload.filters?.statuses)
+        ? payload.filters.statuses
+        : []
+
+      const normalizedStatusOptions = fetchedStatuses
+        .map((option) => ({
+          value: option?.code || STATUS_CODE_BY_LABEL[option?.label] || option?.label,
+          label: option?.label || option?.code || '',
+        }))
+        .filter((option) => option.value && option.label)
+
+      const seen = new Set()
+      const merged = [{ value: 'all', label: 'ทั้งหมด' }]
+      for (const option of normalizedStatusOptions) {
+        if (seen.has(option.value)) continue
+        seen.add(option.value)
+        merged.push(option)
+      }
+      if (merged.length === 1) {
+        merged.push(...defaultFilters.slice(1))
+      }
+      setFilters(merged)
+      setActiveFilter((current) => (merged.some((option) => option.value === current) ? current : 'all'))
+      setDashboardError('')
+    } catch (error) {
+      setDashboardError(error?.response?.data?.error?.message || 'ไม่สามารถโหลดข้อมูลแดชบอร์ดได้')
+    } finally {
+      setDashboardLoading(false)
+    }
+  }, [storeId])
+
   const openWarrantyModal = (mode, warranty) => {
     setModalMode(mode)
     setSelectedWarranty(warranty ?? null)
+    setWarrantyModalError('')
+    setWarrantySubmitting(false)
+    setWarrantyImages(warranty?.images || [])
     setWarrantyModalOpen(true)
   }
 
-  const handleProfileSubmit = (event) => {
+  useEffect(() => {
+    fetchDashboard()
+  }, [fetchDashboard])
+
+  const handleProfileSubmit = async (event) => {
     event.preventDefault()
-    // TODO: POST /profile with storeProfile payload.
-    console.info('mock submit profile', {
-      ...storeProfile,
-      avatarFileName: profileImage.file?.name ?? null,
-    })
-    setProfileModalOpen(false)
+    if (!storeId) return
+    setProfileSubmitting(true)
+    setModalError('')
+    try {
+      const payload = {
+        storeName: storeProfile.storeName,
+        contactName: storeProfile.contactName,
+        email: storeProfile.email,
+        phone: storeProfile.phone,
+        address: storeProfile.address,
+        businessHours: storeProfile.businessHours,
+        avatarUrl: storeProfile.avatarUrl,
+      }
+      const response = await api.patch(`/store/${storeId}/profile`, payload)
+      const updatedProfile = response.data?.data?.storeProfile ?? payload
+      setStoreProfile((prev) => ({ ...prev, ...updatedProfile }))
+      setProfileImage({ file: null, preview: '' })
+      setModalError('')
+      setProfileModalOpen(false)
+    } catch (error) {
+      setModalError(error?.response?.data?.error?.message || 'บันทึกข้อมูลร้านไม่สำเร็จ')
+    } finally {
+      setProfileSubmitting(false)
+    }
   }
 
-  const handlePasswordSubmit = (event) => {
+  const handlePasswordSubmit = async (event) => {
     event.preventDefault()
-    // TODO: PATCH /profile/password with profilePasswords data.
-    console.info('mock submit passwords', profilePasswords)
-    setProfilePasswords({ currentPassword: '', newPassword: '', confirmPassword: '' })
-    setProfileModalOpen(false)
+    if (!storeId) return
+    if (profilePasswords.newPassword !== profilePasswords.confirmPassword) {
+      setModalError('รหัสผ่านใหม่และการยืนยันไม่ตรงกัน')
+      return
+    }
+    setPasswordSubmitting(true)
+    setModalError('')
+    try {
+      await api.post(`/store/${storeId}/change-password`, {
+        old_password: profilePasswords.currentPassword,
+        new_password: profilePasswords.newPassword,
+      })
+      setProfilePasswords({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      setModalError('')
+      setProfileModalOpen(false)
+    } catch (error) {
+      setModalError(error?.response?.data?.error?.message || 'ไม่สามารถเปลี่ยนรหัสผ่านได้')
+    } finally {
+      setPasswordSubmitting(false)
+    }
   }
 
   const handleLogout = () => {
-    // TODO: Connect to sign-out flow when auth store is ready.
-    console.info('mock logout')
+    logout?.()
     setProfileMenuOpen(false)
+    navigate('/signin', { replace: true })
   }
 
-  const filters = ['ทั้งหมด', 'ใช้งานได้', 'ใกล้หมดอายุ', 'หมดอายุ']
+  const handleWarrantySubmit = async (event) => {
+    event.preventDefault()
+    if (!storeId) return
+    setWarrantySubmitting(true)
+    setWarrantyModalError('')
+
+    const formData = new FormData(event.currentTarget)
+    const durationMonthsRaw = Number(formData.get('duration_months') || formData.get('durationMonths') || 0)
+    const payload = {
+      customer_email: String(formData.get('customer_email') || '').trim(),
+      product_name: String(formData.get('product_name') || '').trim(),
+      purchase_date: String(formData.get('purchase_date') || '').trim(),
+      serial: String(formData.get('serial') || '').trim(),
+      warranty_terms: String(formData.get('warranty_terms') || '').trim(),
+      note: String(formData.get('note') || '').trim(),
+    }
+    if (durationMonthsRaw > 0) {
+      payload.duration_months = durationMonthsRaw
+      payload.durationMonths = durationMonthsRaw
+    }
+    const expiryDate = String(formData.get('expiry_date') || '').trim()
+    if (expiryDate) {
+      payload.expiry_date = expiryDate
+      payload.expiryDate = expiryDate
+    }
+
+    try {
+      if (modalMode === 'create') {
+        const response = await api.post(`/store/${storeId}/warranties`, payload)
+        const created = response.data?.data?.warranty
+        if (created) {
+          setWarranties((prev) => [created, ...prev])
+        }
+      } else if (selectedWarranty) {
+        const response = await api.patch(`/warranties/${selectedWarranty.id}`, payload)
+        const updated = response.data?.data?.warranty
+        if (updated) {
+          setWarranties((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+        }
+      }
+      setWarrantyModalOpen(false)
+    } catch (error) {
+      setWarrantyModalError(error?.response?.data?.error?.message || 'ไม่สามารถบันทึกใบรับประกันได้')
+    } finally {
+      setWarrantySubmitting(false)
+    }
+  }
+
+  const handleDownloadPdf = async (warrantyId) => {
+    if (!warrantyId) return
+    try {
+      setDownloadingPdfId(warrantyId)
+      const response = await api.get(`/warranties/${warrantyId}/pdf`, { responseType: 'blob' })
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank', 'noopener')
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    } catch (error) {
+      setDashboardError(error?.response?.data?.error?.message || 'ไม่สามารถดาวน์โหลดใบรับประกันได้')
+    } finally {
+      setDownloadingPdfId(null)
+    }
+  }
+
+  const handleImageUpload = async (files) => {
+    if (!selectedWarranty?.id) return
+
+    const formData = new FormData()
+    files.forEach(file => {
+      formData.append('images', file)
+    })
+
+    try {
+      const response = await api.post(`/warranties/${selectedWarranty.id}/images`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+
+      const updatedWarranty = response.data?.data?.warranty
+      if (updatedWarranty) {
+        setWarrantyImages(updatedWarranty.images || [])
+        // อัปเดต warranties list
+        setWarranties(prev => prev.map(w => w.id === updatedWarranty.id ? updatedWarranty : w))
+      }
+    } catch (error) {
+      throw new Error(error?.response?.data?.error?.message || 'ไม่สามารถอัปโหลดรูปภาพได้')
+    }
+  }
+
+  const handleImageDelete = async (imageId) => {
+    if (!selectedWarranty?.id) return
+
+    try {
+      const response = await api.delete(`/warranties/${selectedWarranty.id}/images/${imageId}`)
+      
+      const updatedWarranty = response.data?.data?.warranty
+      if (updatedWarranty) {
+        setWarrantyImages(updatedWarranty.images || [])
+        // อัปเดต warranties list
+        setWarranties(prev => prev.map(w => w.id === updatedWarranty.id ? updatedWarranty : w))
+      }
+    } catch (error) {
+      throw new Error(error?.response?.data?.error?.message || 'ไม่สามารถลบรูปภาพได้')
+    }
+  }
+
+  const primaryWarranty = filteredWarranties[0] || warranties[0] || null
+  const storeDisplayName = storeProfile.storeName || user?.store?.name || user?.storeName || user?.name || 'ร้านของฉัน'
+  const storeEmail = storeProfile.email || user?.store?.email || user?.email || ''
 
   return (
     <div className="min-h-screen bg-sky-50/80 pb-12">
@@ -213,8 +418,8 @@ export default function WarrantyDashboard() {
                 <div className="grid h-10 w-10 place-items-center rounded-full bg-amber-300 text-xl">🏪</div>
               )}
               <div className="hidden text-left text-sm md:block">
-                <div className="font-medium text-gray-900">{storeProfile.storeName}</div>
-                <div className="text-xs text-gray-500">{storeProfile.email}</div>
+                <div className="font-medium text-gray-900">{storeDisplayName}</div>
+                <div className="text-xs text-gray-500">{storeEmail}</div>
               </div>
               <span className="hidden text-gray-400 md:inline">▾</span>
             </button>
@@ -231,8 +436,8 @@ export default function WarrantyDashboard() {
                     <div className="grid h-12 w-12 place-items-center rounded-full bg-amber-200 text-2xl">🏪</div>
                   )}
                   <div>
-                    <div className="font-medium text-gray-900">{storeProfile.storeName}</div>
-                    <div className="text-xs text-gray-500">{storeProfile.email}</div>
+                    <div className="font-medium text-gray-900">{storeDisplayName}</div>
+                    <div className="text-xs text-gray-500">{storeEmail}</div>
                   </div>
                 </div>
                 <button
@@ -258,142 +463,288 @@ export default function WarrantyDashboard() {
       </header>
 
       <main className="mx-auto mt-8 max-w-6xl px-4">
-        <div className="rounded-3xl border border-sky-100 bg-gradient-to-b from-white to-sky-50 p-6 shadow-xl">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <SectionTitle>จัดการการรับประกัน</SectionTitle>
-            <div className="flex items-center gap-3">
-              <div className="flex gap-2 rounded-full bg-white p-1">
-                <button className="rounded-full px-4 py-1 text-sm font-medium text-gray-400 shadow-sm">ภาพรวม</button>
-                <button className="rounded-full bg-sky-100 px-4 py-1 text-sm font-medium text-sky-700 shadow">การรับประกัน</button>
-              </div>
+        {dashboardError && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            <span>{dashboardError}</span>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => openWarrantyModal('create')}
-                className="rounded-full bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-sky-500"
+                onClick={() => setDashboardError('')}
+                className="rounded-full bg-white px-3 py-1 text-xs font-medium text-amber-600 shadow hover:bg-amber-100"
               >
-                สร้างใบรับประกัน
+                ปิด
+              </button>
+              <button
+                type="button"
+                onClick={fetchDashboard}
+                className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white shadow hover:bg-amber-400"
+              >
+                ลองอีกครั้ง
               </button>
             </div>
           </div>
-
-          <div className="mb-6 flex flex-wrap items-center gap-3">
-            <div className="flex flex-1 items-center rounded-2xl bg-white px-4 py-2 shadow ring-1 ring-black/5">
-              <span className="text-gray-400">🔍</span>
-              <input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                className="w-full bg-transparent px-3 py-2 text-sm focus:outline-none"
-                placeholder="ค้นหาด้วยชื่อสินค้า, ร้านค้า, รหัสรับประกัน"
-              />
+        )}
+        <div className="rounded-3xl border border-sky-100 bg-gradient-to-b from-white to-sky-50 p-6 shadow-xl">
+          {dashboardLoading ? (
+            <div className="grid min-h-[320px] place-items-center text-sm text-gray-500">กำลังโหลดข้อมูล...</div>
+          ) : !storeId ? (
+            <div className="grid min-h-[320px] place-items-center text-center text-sm text-gray-500">
+              <div>
+                <div className="text-base font-medium text-gray-700">หน้านี้สำหรับบัญชีร้านค้าเท่านั้น</div>
+                <p className="mt-1 text-xs text-gray-500">กรุณาเข้าสู่ระบบด้วยบัญชีร้านค้าเพื่อเข้าถึงแดชบอร์ด</p>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {filters.map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setActiveFilter(filter)}
-                  className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm transition ${
-                    activeFilter === filter
-                      ? filter === 'ใช้งานได้'
-                        ? 'bg-emerald-500 text-white'
-                        : filter === 'ใกล้หมดอายุ'
-                        ? 'bg-amber-500 text-white'
-                        : filter === 'หมดอายุ'
-                        ? 'bg-rose-500 text-white'
-                        : 'bg-gray-900 text-white'
-                      : 'bg-white text-gray-500 hover:bg-gray-50'
-                  }`}
-                >
-                  {filter}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-8 grid gap-4">
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="text-lg font-semibold text-gray-900">Warranty Card</div>
-                  <div className="mt-2 grid gap-1 text-sm text-gray-700 md:grid-cols-2">
-                    <div>รหัสรับประกัน: <span className="font-medium text-gray-900">WR001</span></div>
-                    <div>ลูกค้า: <span className="font-medium text-gray-900">ญาณิดา สรรพสินค้า</span></div>
-                    <div>เบอร์โทรศัพท์: <span className="font-medium text-gray-900">065-292-3242</span></div>
-                    <div>อีเมลลูกค้า: <span className="font-medium text-gray-900">natthanan@gmail.com</span></div>
+          ) : (
+            <>
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+                <SectionTitle>จัดการการรับประกัน</SectionTitle>
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-2 rounded-full bg-white p-1">
+                    <button className="rounded-full px-4 py-1 text-sm font-medium text-gray-400 shadow-sm">ภาพรวม</button>
+                    <button className="rounded-full bg-sky-100 px-4 py-1 text-sm font-medium text-sky-700 shadow">การรับประกัน</button>
                   </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
                   <button
                     type="button"
-                    className="h-10 min-w-[96px] rounded-full bg-sky-500 px-5 text-sm font-medium text-white shadow hover:bg-sky-400"
+                    onClick={() => openWarrantyModal('create')}
+                    className="rounded-full bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-sky-500"
                   >
-                    PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowWarrantyDetails((prev) => !prev)}
-                    className="rounded-full border border-amber-300 px-4 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-100"
-                  >
-                    {showWarrantyDetails ? 'ซ่อนรายละเอียด' : 'รายละเอียดเพิ่มเติม'}
+                    สร้างใบรับประกัน
                   </button>
                 </div>
               </div>
-              <p className="mt-4 rounded-xl bg-white/60 p-4 text-xs text-amber-600">
-                หากไม่กรอกข้อมูลจะทำให้การแสดงผลการ์ดนี้ไม่ครบถ้วน
-              </p>
-            </div>
 
-            <div className="border-l-4 border-sky-400 pl-4 text-xs text-sky-600">
-              หอดูดาว: แสดงรายการสินค้าที่จะรวมภายใต้ใบรับประกันนี้ในอนาคต
-            </div>
-          </div>
+              <div className="mb-6 flex flex-wrap items-center gap-3">
+                <div className="flex flex-1 items-center rounded-2xl bg-white px-4 py-2 shadow ring-1 ring-black/5">
+                  <span className="text-gray-400">🔍</span>
+                  <input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    className="w-full bg-transparent px-3 py-2 text-sm focus:outline-none"
+                    placeholder="ค้นหาด้วยชื่อสินค้า, ร้านค้า, รหัสรับประกัน"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {filters.map((filter) => {
+                    const isActiveFilter = activeFilter === filter.value
+                    const activeClass = isActiveFilter
+                      ? filter.value === 'active'
+                        ? 'bg-emerald-500 text-white'
+                        : filter.value === 'nearing_expiration'
+                        ? 'bg-amber-500 text-white'
+                        : filter.value === 'expired'
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-gray-900 text-white'
+                      : 'bg-white text-gray-500 hover:bg-gray-50'
+                    return (
+                      <button
+                        key={filter.value}
+                        type="button"
+                        onClick={() => setActiveFilter(filter.value)}
+                        className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm transition ${activeClass}`}
+                      >
+                        {filter.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
 
-          <div className="grid gap-4">
-            {showWarrantyDetails &&
-              (filteredWarranties.length > 0 ? (
-                filteredWarranties.map((warranty) => (
-                  <div
-                    key={warranty.id}
-                    className="flex flex-col justify-between gap-6 rounded-3xl bg-white p-6 shadow ring-1 ring-black/5 md:flex-row"
-                  >
-                    <div className="flex-1 space-y-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="text-lg font-semibold text-gray-900">{warranty.productName}</div>
-                        <StatusBadge label={warranty.statusTag} className={warranty.statusColor} />
-                        <span className="text-xs text-gray-400">#{warranty.id}</span>
+              <div className="mb-8 grid gap-4">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="text-lg font-semibold text-gray-900">Warranty Card</div>
+                      <div className="mt-2 grid gap-1 text-sm text-gray-700 md:grid-cols-2">
+                        <div>รหัสรับประกัน: <span className="font-medium text-gray-900">{primaryWarranty?.id || '-'}</span></div>
+                        <div>ลูกค้า: <span className="font-medium text-gray-900">{primaryWarranty?.customerName || '-'}</span></div>
+                        <div>เบอร์โทรศัพท์: <span className="font-medium text-gray-900">{primaryWarranty?.customerPhone || '-'}</span></div>
+                        <div>อีเมลลูกค้า: <span className="font-medium text-gray-900">{primaryWarranty?.customerEmail || '-'}</span></div>
                       </div>
-                      <div className="grid gap-2 text-sm text-gray-600 md:grid-cols-2">
-                        <div>Serial No.: <span className="font-medium text-gray-900">{warranty.serial}</span></div>
-                        <div>ลูกค้า: <span className="font-medium text-gray-900">{warranty.customerName}</span></div>
-                        <div>วันที่ซื้อ: <span className="font-medium text-gray-900">{warranty.purchaseDate}</span></div>
-                        <div>วันหมดอายุ: <span className="font-medium text-gray-900">{warranty.expiryDate}</span></div>
-                        <div>อีเมลลูกค้า: <span className="font-medium text-gray-900">{warranty.customerEmail}</span></div>
-                        <div>จำนวนวันคงเหลือ: <span className="font-medium text-gray-900">{warranty.daysLeft} วัน</span></div>
-                      </div>
-                      <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-800">{warranty.coverageNote}</p>
+                      
+                      {/* แสดงรูปภาพใน Warranty Card */}
+                      {primaryWarranty?.images && primaryWarranty.images.length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-xs text-gray-600 mb-2">รูปภาพประกอบ</div>
+                          <div className="flex gap-2">
+                            {primaryWarranty.images.slice(0, 3).map((image, index) => (
+                              <div 
+                                key={image.id} 
+                                className="group relative h-12 w-12 cursor-pointer overflow-hidden rounded-lg"
+                                onClick={() => setImagePreview({ 
+                                  open: true, 
+                                  images: primaryWarranty.images, 
+                                  index 
+                                })}
+                              >
+                                <img
+                                  src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${image.url}`}
+                                  alt={`Preview ${index + 1}`}
+                                  className="h-full w-full object-cover transition-transform group-hover:scale-110"
+                                />
+                                <div className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
+                              </div>
+                            ))}
+                            {primaryWarranty.images.length > 3 && (
+                              <div 
+                                className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-lg bg-gray-200 text-xs text-gray-600 hover:bg-gray-300"
+                                onClick={() => setImagePreview({ 
+                                  open: true, 
+                                  images: primaryWarranty.images, 
+                                  index: 3 
+                                })}
+                              >
+                                +{primaryWarranty.images.length - 3}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    <div className="grid place-items-center gap-4">
-                      <div className="grid h-32 w-40 place-items-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-400">
-                        เพิ่มรูปภาพ
-                      </div>
+                    
+                    <div className="flex flex-col items-end gap-2">
                       <button
                         type="button"
-                        onClick={() => openWarrantyModal('edit', warranty)}
-                        className="flex items-center gap-2 rounded-full border border-sky-500 px-4 py-2 text-sm font-medium text-sky-600 hover:bg-sky-50"
+                        onClick={() => primaryWarranty && handleDownloadPdf(primaryWarranty.id)}
+                        disabled={!primaryWarranty || downloadingPdfId === primaryWarranty?.id}
+                        className={`h-10 min-w-[96px] rounded-full bg-sky-500 px-5 text-sm font-medium text-white shadow transition ${
+                          !primaryWarranty || downloadingPdfId === primaryWarranty?.id
+                            ? 'cursor-not-allowed opacity-70'
+                            : 'hover:bg-sky-400'
+                        }`}
                       >
-                        <span>แก้ไข</span>
-                        <span aria-hidden>✏️</span>
+                        {downloadingPdfId === primaryWarranty?.id ? 'กำลังดาวน์โหลด…' : 'PDF'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowWarrantyDetails((prev) => !prev)}
+                        className="rounded-full border border-amber-300 px-4 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-100"
+                      >
+                        {showWarrantyDetails ? 'ซ่อนรายละเอียด' : 'รายละเอียดเพิ่มเติม'}
                       </button>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500">
-                  ไม่พบข้อมูลตามเงื่อนไขที่เลือก
+                  <p className="mt-4 rounded-xl bg-white/60 p-4 text-xs text-amber-600">
+                    หากไม่กรอกข้อมูลจะทำให้การแสดงผลการ์ดนี้ไม่ครบถ้วน
+                  </p>
                 </div>
-              ))}
-          </div>
+
+                <div className="border-l-4 border-sky-400 pl-4 text-xs text-sky-600">
+                  หอดูดาว: แสดงรายการสินค้าที่จะรวมภายใต้ใบรับประกันนี้ในอนาคต
+                </div>
+              </div>
+
+              <div className="grid gap-4">
+                {showWarrantyDetails &&
+                  (filteredWarranties.length > 0 ? (
+                    filteredWarranties.map((warranty) => (
+                      <div
+                        key={warranty.id}
+                        className="flex flex-col justify-between gap-6 rounded-3xl bg-white p-6 shadow ring-1 ring-black/5 md:flex-row"
+                      >
+                        <div className="flex-1 space-y-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <div className="text-lg font-semibold text-gray-900">{warranty.productName}</div>
+                            <StatusBadge label={warranty.statusTag} className={warranty.statusColor} />
+                            <span className="text-xs text-gray-400">#{warranty.id}</span>
+                          </div>
+                          <div className="grid gap-2 text-sm text-gray-600 md:grid-cols-2">
+                            <div>Serial No.: <span className="font-medium text-gray-900">{warranty.serial || '-'}</span></div>
+                            <div>ลูกค้า: <span className="font-medium text-gray-900">{warranty.customerName || '-'}</span></div>
+                            <div>วันที่ซื้อ: <span className="font-medium text-gray-900">{warranty.purchaseDate || '-'}</span></div>
+                            <div>วันหมดอายุ: <span className="font-medium text-gray-900">{warranty.expiryDate || '-'}</span></div>
+                            <div>อีเมลลูกค้า: <span className="font-medium text-gray-900">{warranty.customerEmail || '-'}</span></div>
+                            <div>จำนวนวันคงเหลือ: <span className="font-medium text-gray-900">{warranty.daysLeft ?? 0} วัน</span></div>
+                          </div>
+                          <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-800">{warranty.coverageNote || '-'}</p>
+                          
+                          {/* แสดงรูปภาพ */}
+                          {warranty.images && warranty.images.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="text-sm font-medium text-gray-700">รูปภาพประกอบ</div>
+                              <div className="flex gap-2 overflow-x-auto">
+                                {warranty.images.map((image, index) => (
+                                  <div key={image.id} className="group relative flex-shrink-0 cursor-pointer">
+                                    <img
+                                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${image.url}`}
+                                      alt={image.originalName || 'Warranty image'}
+                                      className="h-20 w-20 rounded-lg object-cover transition-transform group-hover:scale-105"
+                                      onClick={() => setImagePreview({ 
+                                        open: true, 
+                                        images: warranty.images, 
+                                        index 
+                                      })}
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                      }}
+                                    />
+                                    {/* Preview Overlay */}
+                                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                                      <span className="text-xs text-white">👁️</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid place-items-center gap-4">
+                          {/* Image Preview Box */}
+                          <div className="relative h-32 w-40 overflow-hidden rounded-2xl border border-gray-300 bg-gray-50">
+                            {warranty.images && warranty.images.length > 0 ? (
+                              <div 
+                                className="group relative h-full w-full cursor-pointer"
+                                onClick={() => setImagePreview({ 
+                                  open: true, 
+                                  images: warranty.images, 
+                                  index: 0 
+                                })}
+                              >
+                                <img
+                                  src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${warranty.images[0].url}`}
+                                  alt="Warranty preview"
+                                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                />
+                                {/* Image Count Badge */}
+                                {warranty.images.length > 1 && (
+                                  <div className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-1 text-xs text-white">
+                                    +{warranty.images.length - 1}
+                                  </div>
+                                )}
+                                {/* Preview Overlay */}
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                                  <span className="text-white">👁️ ดูรูป</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
+                                <div className="text-center">
+                                  <div className="mb-1 text-2xl">📷</div>
+                                  <div>ไม่มีรูปภาพ</div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <button
+                            type="button"
+                            onClick={() => openWarrantyModal('edit', warranty)}
+                            className="flex items-center gap-2 rounded-full border border-sky-500 px-4 py-2 text-sm font-medium text-sky-600 hover:bg-sky-50"
+                          >
+                            <span>แก้ไข</span>
+                            <span aria-hidden>✏️</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500">
+                      ไม่พบข้อมูลตามเงื่อนไขที่เลือก
+                    </div>
+                  ))}
+              </div>
+            </>
+          )}
         </div>
       </main>
 
@@ -418,7 +769,12 @@ export default function WarrantyDashboard() {
               </div>
               <button
                 type="button"
-                onClick={() => setProfileModalOpen(false)}
+                onClick={() => {
+                  setProfileModalOpen(false)
+                  setModalError('')
+                  setProfileSubmitting(false)
+                  setPasswordSubmitting(false)
+                }}
                 className="text-2xl text-gray-400 hover:text-gray-600"
               >
                 ×
@@ -428,7 +784,10 @@ export default function WarrantyDashboard() {
               <div className="mb-4 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setProfileTab('info')}
+                  onClick={() => {
+                    setProfileTab('info')
+                    setModalError('')
+                  }}
                   className={`flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${
                     profileTab === 'info' ? 'bg-amber-100 text-amber-700' : 'bg-amber-50 text-gray-500'
                   }`}
@@ -437,7 +796,10 @@ export default function WarrantyDashboard() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setProfileTab('password')}
+                  onClick={() => {
+                    setProfileTab('password')
+                    setModalError('')
+                  }}
                   className={`flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${
                     profileTab === 'password' ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-50 text-gray-500'
                   }`}
@@ -476,6 +838,9 @@ export default function WarrantyDashboard() {
                     <div className="mt-1 text-xs text-gray-400">รองรับไฟล์ .jpg, .png ขนาดไม่เกิน 2 MB</div>
                   </div>
                 </div>
+                {modalError && profileTab === 'info' && (
+                  <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{modalError}</div>
+                )}
                 <div className="grid gap-3">
                   {[
                     ['storeName', 'ชื่อร้าน'],
@@ -500,14 +865,20 @@ export default function WarrantyDashboard() {
                 <div className="mt-6 flex justify-end">
                   <button
                     type="submit"
-                    className="rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-sky-500"
+                    disabled={profileSubmitting}
+                    className={`rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow transition ${
+                      profileSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-500'
+                    }`}
                   >
-                    บันทึก
+                    {profileSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
                   </button>
                 </div>
               </form>
             ) : (
               <form onSubmit={handlePasswordSubmit} className="px-6 pb-6">
+                {modalError && profileTab === 'password' && (
+                  <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{modalError}</div>
+                )}
                 <div className="grid gap-3">
                   {[
                     ['currentPassword', 'รหัสผ่านเก่า'],
@@ -529,9 +900,12 @@ export default function WarrantyDashboard() {
                 <div className="mt-6 flex justify-end">
                   <button
                     type="submit"
-                    className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-400"
+                    disabled={passwordSubmitting}
+                    className={`rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow transition ${
+                      passwordSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-emerald-400'
+                    }`}
                   >
-                    ยืนยัน
+                    {passwordSubmitting ? 'กำลังบันทึก...' : 'ยืนยัน'}
                   </button>
                 </div>
               </form>
@@ -550,24 +924,24 @@ export default function WarrantyDashboard() {
               </div>
               <button
                 type="button"
-                onClick={() => setWarrantyModalOpen(false)}
+                onClick={() => {
+                  setWarrantyModalOpen(false)
+                  setWarrantyModalError('')
+                  setWarrantySubmitting(false)
+                }}
                 className="text-2xl text-white/80 hover:text-white"
               >
                 ×
               </button>
             </div>
-            <form
-              className="grid gap-3 px-6 pb-6 pt-5"
-              onSubmit={(event) => {
-                event.preventDefault()
-                // TODO: Connect to create/update warranty endpoint.
-                console.info(`mock ${modalMode} warranty`, selectedWarranty)
-                setWarrantyModalOpen(false)
-              }}
-            >
+            <form className="grid gap-3 px-6 pb-6 pt-5" onSubmit={handleWarrantySubmit}>
+              {warrantyModalError && (
+                <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{warrantyModalError}</div>
+              )}
               <label className="text-sm text-gray-600">
                 อีเมลลูกค้า
                 <input
+                  name="customer_email"
                   defaultValue={modalMode === 'edit' ? selectedWarranty?.customerEmail : ''}
                   className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                   placeholder="กรอกอีเมลลูกค้า"
@@ -578,6 +952,7 @@ export default function WarrantyDashboard() {
               <label className="text-sm text-gray-600">
                 ชื่อสินค้า
                 <input
+                  name="product_name"
                   defaultValue={modalMode === 'edit' ? selectedWarranty?.productName : ''}
                   className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                   placeholder="กรอกชื่อสินค้า"
@@ -589,7 +964,12 @@ export default function WarrantyDashboard() {
                 <label className="text-sm text-gray-600">
                   ระยะเวลา (เดือน)
                   <select
-                    defaultValue={modalMode === 'edit' ? 12 : 12}
+                    name="duration_months"
+                    defaultValue={
+                      modalMode === 'edit'
+                        ? selectedWarranty?.durationMonths || Math.max(1, Math.round((selectedWarranty?.durationDays || 30) / 30))
+                        : 12
+                    }
                     className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                   >
                     {[6, 12, 18, 24].map((month) => (
@@ -602,6 +982,7 @@ export default function WarrantyDashboard() {
                 <label className="text-sm text-gray-600">
                   Serial No.
                   <input
+                    name="serial"
                     defaultValue={modalMode === 'edit' ? selectedWarranty?.serial : ''}
                     className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                     placeholder="กรอก Serial No."
@@ -614,33 +995,47 @@ export default function WarrantyDashboard() {
                 <label className="text-sm text-gray-600">
                   วันเริ่ม
                   <input
+                    name="purchase_date"
                     defaultValue={modalMode === 'edit' ? selectedWarranty?.purchaseDate : ''}
                     className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                    type="text"
-                    placeholder="3/9/2568"
+                    type="date"
                     required
                   />
                 </label>
                 <label className="text-sm text-gray-600">
                   วันหมดอายุ
                   <input
+                    name="expiry_date"
                     defaultValue={modalMode === 'edit' ? selectedWarranty?.expiryDate : ''}
                     className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                    type="text"
-                    placeholder="3/9/2569"
-                    required
+                    type="date"
                   />
                 </label>
               </div>
               <label className="text-sm text-gray-600">
                 เงื่อนไขการรับประกัน
                 <textarea
+                  name="warranty_terms"
                   defaultValue={modalMode === 'edit' ? selectedWarranty?.coverageNote : ''}
                   className="mt-1 min-h-[96px] w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                   placeholder="กรอกเงื่อนไขการรับประกัน"
                   required
                 />
               </label>
+              
+              {/* Image Upload Section - แสดงเฉพาะเมื่อแก้ไข */}
+              {modalMode === 'edit' && selectedWarranty && (
+                <div className="space-y-2">
+                  <label className="text-sm text-gray-600">รูปภาพประกอบ</label>
+                  <ImageUpload
+                    images={warrantyImages}
+                    onUpload={handleImageUpload}
+                    onDelete={handleImageDelete}
+                    maxImages={5}
+                    disabled={warrantySubmitting}
+                  />
+                </div>
+              )}
               <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
                 <button
                   type="button"
@@ -658,14 +1053,26 @@ export default function WarrantyDashboard() {
               <div className="mt-4 flex justify-end">
                 <button
                   type="submit"
-                  className="rounded-full bg-sky-600 px-6 py-2 text-sm font-semibold text-white shadow hover:bg-sky-500"
+                  disabled={warrantySubmitting}
+                  className={`rounded-full bg-sky-600 px-6 py-2 text-sm font-semibold text-white shadow transition ${
+                    warrantySubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-500'
+                  }`}
                 >
-                  {modalMode === 'create' ? 'บันทึก' : 'ยืนยัน'}
+                  {warrantySubmitting ? 'กำลังบันทึก...' : modalMode === 'create' ? 'บันทึก' : 'ยืนยัน'}
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {imagePreview.open && (
+        <ImagePreview
+          images={imagePreview.images}
+          initialIndex={imagePreview.index}
+          onClose={() => setImagePreview({ open: false, images: [], index: 0 })}
+        />
       )}
     </div>
   )

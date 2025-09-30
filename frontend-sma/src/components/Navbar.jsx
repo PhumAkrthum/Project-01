@@ -1,5 +1,6 @@
 // src/components/Navbar.jsx
-import { Link, useLocation } from "react-router-dom";
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../store/auth'
 
 function ShieldLogo({ className = "w-6 h-6" }) {
   return (
@@ -20,8 +21,25 @@ function ShieldLogo({ className = "w-6 h-6" }) {
 
 export default function Navbar() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+
+  // === เพิ่มความสามารถด้าน auth (ถ้าไม่มีจะ fallback เป็นว่าง) ===
+  const { user, logout } = useAuth() || {};
+  const isAuthenticated = !!user;
+  const displayName =
+    user?.store?.name || user?.storeName || user?.name || user?.email || 'บัญชีของฉัน';
+
   const onSignin = pathname !== "/signin";
   const onSignup = pathname !== "/signup";
+
+  // === เพิ่ม handleLogout แบบ async และ redirect ===
+  const handleLogout = async () => {
+    try {
+      await logout?.();
+    } finally {
+      navigate('/signin', { replace: true });
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-black/10">
@@ -31,24 +49,74 @@ export default function Navbar() {
           <span className="text-xl font-semibold text-gray-900">Warranty</span>
         </Link>
 
-        <div className="flex items-center gap-3">
-          {onSignin && (
-            <Link
-              to="/signin"
-              className="inline-flex items-center justify-center rounded-xl border border-blue-600 text-blue-700 px-4 py-2 text-sm font-medium hover:bg-blue-50 transition"
+        {/* === เพิ่มเมนูกลางแบบ NavLink (ไม่กระทบของเดิม) === */}
+        <div className="hidden md:flex items-center gap-6">
+          <NavLink
+            end
+            to="/"
+            className={({ isActive }) =>
+              `text-sm ${isActive ? 'text-gray-900' : 'text-gray-600 hover:text-gray-900'}`
+            }
+          >
+            หน้าหลัก
+          </NavLink>
+          <a href="#features" className="text-sm text-gray-600 hover:text-gray-900">การรับประกัน</a>
+          <a href="#why" className="text-sm text-gray-600 hover:text-gray-900">เกี่ยวกับเรา</a>
+          {isAuthenticated && (
+            <NavLink
+              to="/dashboard/warranty"
+              className={({ isActive }) =>
+                `text-sm ${isActive ? 'text-[color:var(--brand)]' : 'text-gray-600 hover:text-gray-900'}`
+              }
             >
-              เข้าสู่ระบบ
-            </Link>
-          )}
-          {onSignup && (
-            <Link
-              to="/signup"
-              className="inline-flex items-center justify-center rounded-xl bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition shadow-sm"
-            >
-              สมัครสมาชิก
-            </Link>
+              แดชบอร์ด
+            </NavLink>
           )}
         </div>
+
+        {/* === คงปุ่มเดิมไว้ และเพิ่มสาขาเมื่อ login แล้ว === */}
+        {isAuthenticated ? (
+          <div className="flex items-center gap-4">
+            <Link
+              to="/dashboard/warranty"
+              className="hidden md:inline text-sm font-medium text-[color:var(--brand)] hover:text-[color:var(--brand-600)]"
+            >
+              ไปที่แดชบอร์ด
+            </Link>
+            <div className="flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white">
+                {displayName.charAt(0).toUpperCase()}
+              </span>
+              <span className="hidden sm:inline">{displayName}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-sm text-gray-500 hover:text-gray-800 transition"
+            >
+              ออกจากระบบ
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            {onSignin && (
+              <Link
+                to="/signin"
+                className="inline-flex items-center justify-center rounded-xl border border-blue-600 text-blue-700 px-4 py-2 text-sm font-medium hover:bg-blue-50 transition"
+              >
+                เข้าสู่ระบบ
+              </Link>
+            )}
+            {onSignup && (
+              <Link
+                to="/signup"
+                className="inline-flex items-center justify-center rounded-xl bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition shadow-sm"
+              >
+                สมัครสมาชิก
+              </Link>
+            )}
+          </div>
+        )}
       </nav>
     </header>
   );
