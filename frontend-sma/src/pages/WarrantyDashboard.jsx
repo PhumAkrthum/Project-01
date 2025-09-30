@@ -159,15 +159,33 @@ export default function WarrantyDashboard() {
     reader.readAsDataURL(file)
   }
 
+  /* ===================== CHANGED BLOCK: fetchDashboard ===================== */
   const fetchDashboard = useCallback(async () => {
-    if (!storeIdResolved) {
-      setDashboardLoading(false)
-      return
-    }
     setDashboardError('')
     setDashboardLoading(true)
     try {
-      const response = await api.get(`/store/${storeIdResolved}/dashboard`)
+      // 1) ขอ user จากเซิร์ฟเวอร์ก่อน เพื่อให้ได้ storeId ที่แน่นอน
+      const meRes = await api.get('/auth/me')
+      const serverStoreId =
+        meRes?.data?.user?.storeProfile?.id ??
+        meRes?.data?.user?.store?.id ??
+        meRes?.data?.user?.storeId ??
+        null
+
+      if (!serverStoreId) {
+        setDashboardError('บัญชีนี้ไม่ใช่ร้านค้า หรือยังไม่มีรหัสร้าน (storeId)')
+        setWarranties([])
+        setDashboardLoading(false)
+        return
+      }
+
+      // (debug) ถ้า id ใน state ไม่ตรงกับที่เซิร์ฟเวอร์รายงาน จะเห็นใน console
+      if (storeIdResolved && String(storeIdResolved) !== String(serverStoreId)) {
+        console.debug('storeId mismatch', { fromState: storeIdResolved, fromServer: serverStoreId })
+      }
+
+      // 2) ใช้ serverStoreId เสมอในการยิง dashboard
+      const response = await api.get(`/store/${serverStoreId}/dashboard`)
       const payload = response.data?.data ?? {}
 
       if (payload.storeProfile) {
@@ -211,6 +229,7 @@ export default function WarrantyDashboard() {
       setDashboardLoading(false)
     }
   }, [storeIdResolved])
+  /* =================== END CHANGED BLOCK: fetchDashboard =================== */
 
   const openWarrantyModal = (mode, warranty) => {
     setModalMode(mode)

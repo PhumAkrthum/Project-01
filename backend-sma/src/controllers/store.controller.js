@@ -1,3 +1,4 @@
+// backend-sma/src/controllers/store.controller.js
 import bcrypt from "bcryptjs";
 import { prisma } from "../db/prisma.js";
 import {
@@ -14,17 +15,16 @@ import { sendError, sendSuccess } from "../utils/http.js";
 
 const DEFAULT_NOTIFY_DAYS = 14;
 
+// ✅ แก้จุดเดียว: ใช้ sub จากโทเคนเป็นแหล่งความจริง ไม่เชื่อ :storeId จากพารามิเตอร์
 function parseStoreId(req, res) {
-  const storeId = Number(req.params.storeId);
-  if (!Number.isInteger(storeId)) {
-    sendError(res, 400, "Store id must be a number");
+  const sub = Number(req.user?.sub);
+  if (!Number.isInteger(sub)) {
+    sendError(res, 403, "ไม่พบรหัสร้านในโทเคน");
     return null;
   }
-  if (Number(req.user?.sub) !== storeId) {
-    sendError(res, 403, "คุณไม่มีสิทธิ์เข้าถึงร้านค้านี้");
-    return null;
-  }
-  return storeId;
+  // ผูกพารามิเตอร์ให้เท่ากับ sub เสมอ เพื่อความสอดคล้อง
+  req.params.storeId = String(sub);
+  return sub;
 }
 
 function mapStoreProfile(profile, userEmail) {
@@ -123,7 +123,10 @@ export async function updateStoreProfile(req, res) {
       contactName:
         payload.contactName ?? existingProfile?.contactName ?? existingProfile?.ownerName ?? null,
       ownerName:
-        payload.ownerName ?? existingProfile?.ownerName ?? payload.contactName ?? existingProfile?.contactName ??
+        payload.ownerName ??
+        existingProfile?.ownerName ??
+        payload.contactName ??
+        existingProfile?.contactName ??
         payload.storeName,
       storeType: payload.storeType ?? existingProfile?.storeType ?? "ทั่วไป",
       phone: payload.phone,
