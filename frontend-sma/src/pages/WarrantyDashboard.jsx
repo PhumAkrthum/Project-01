@@ -1,4 +1,3 @@
-// frontend-sma/src/pages/WarrantyDashboard.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -63,7 +62,6 @@ function pad3(n) {
   return s.length >= 3 ? s : '0'.repeat(3 - s.length) + s
 }
 function nextSerialFromList(list) {
-  // หา SN สูงสุดจาก warranties เดิม แล้ว +1
   let max = 0
   for (const w of list || []) {
     const m = String(w?.serial || '').match(/^SN(\d+)$/i)
@@ -89,8 +87,6 @@ function addMonthsKeepDay(startISO, months) {
   }
   return toISODate(result)
 }
-
-// ช่วยคำนวณรหัสสถานะระดับ "รายการ" เผื่อ backend ไม่ส่งมา
 function deriveItemStatusCode(item, notifyDays = 14) {
   if (!item?.expiryDate) return 'active'
   const today = new Date()
@@ -148,14 +144,14 @@ export default function WarrantyDashboard() {
   const [warrantyModalError, setWarrantyModalError] = useState('')
   const [downloadingPdfId, setDownloadingPdfId] = useState(null)
 
-  // รูปที่โชว์ใน modal edit ของ “รายการ”
+  // รูปใน modal edit
   const [warrantyImages, setWarrantyImages] = useState([])
 
   const [imagePreview, setImagePreview] = useState({ open: false, images: [], index: 0 })
 
   const profileAvatarSrc = profileImage.preview || storeProfile.avatarUrl || ''
 
-  /* ---------- สำหรับสร้างหลายสินค้าในใบเดียว (ฝั่งหน้า) + auto expiry ---------- */
+  /* ---------- สำหรับสร้างหลายสินค้าในใบเดียว + auto expiry ---------- */
   const makeItem = (seedSN = null) => ({
     customer_email: '',
     product_name: '',
@@ -165,7 +161,7 @@ export default function WarrantyDashboard() {
     expiry_date: '',
     warranty_terms: '',
     note: '',
-    images: [], // File[] – แนบรออัปหลังสร้างเสร็จ
+    images: [],
   })
   const [createItems, setCreateItems] = useState([makeItem()])
 
@@ -203,13 +199,10 @@ export default function WarrantyDashboard() {
     const term = searchTerm.trim().toLowerCase()
 
     return (warranties || []).map(header => {
-      // คัด items ตาม filter + keyword
       const items = (header.items || []).filter(it => {
-        // สถานะ
         const code = it.statusCode || STATUS_CODE_BY_LABEL[it.statusTag] || deriveItemStatusCode(it, storeProfile.notifyDaysInAdvance)
         const passFilter = activeFilter === 'all' ? true : code === activeFilter
 
-        // คีย์เวิร์ด: ค้นทั้ง header กับ item
         const hay = [
           header.code, header.customerName, header.customerEmail, header.customerPhone,
           it.productName, it.serial, it.coverageNote, it.note
@@ -230,7 +223,6 @@ export default function WarrantyDashboard() {
     setModalError('')
     setProfileSubmitting(false)
     setPasswordSubmitting(false)
-    setProfilePasswords({ currentPassword: '', newPassword: '', confirmPassword: '' })
   }
 
   const handleProfileAvatarSelect = (event) => {
@@ -299,15 +291,40 @@ export default function WarrantyDashboard() {
     }
   }, [storeIdResolved])
 
+  /* ========== โหมดแก้ไข: state + auto-expiry ========== */
+  const [editForm, setEditForm] = useState(null)
+  const [manualExpiry, setManualExpiry] = useState(false)
+  const computeExpiry = useCallback((purchaseISO, months) => {
+    const m = Number(months || 0)
+    if (!purchaseISO || !m) return ''
+    return addMonthsKeepDay(purchaseISO, m)
+  }, [])
+
   const openWarrantyModal = (mode, item = null) => {
     setModalMode(mode)
-    setSelectedItem(item) // ถ้าแก้ไข ส่ง item ของใบที่คลิก
+    setSelectedItem(item)
     setWarrantyModalError('')
     setWarrantySubmitting(false)
     setWarrantyImages(item?.images || [])
+
     if (mode === 'create') {
       setCreateItems([makeItem()])
+      setEditForm(null)
+      setManualExpiry(false)
+    } else if (mode === 'edit' && item) {
+      setEditForm({
+        product_name: item.productName || '',
+        duration_months: item.durationMonths ??
+          Math.max(1, Math.round((item.durationDays || 30) / 30)),
+        serial: item.serial || '',
+        purchase_date: item.purchaseDate || '',
+        expiry_date: item.expiryDate || '',
+        warranty_terms: item.coverageNote || '',
+        note: item.note || '',
+      })
+      setManualExpiry(false) // ให้ auto คำนวณจนกว่าผู้ใช้จะแก้ expiry เอง
     }
+
     setWarrantyModalOpen(true)
   }
 
@@ -383,32 +400,34 @@ export default function WarrantyDashboard() {
     try {
       // โหมดแก้ไข -> “รายการเดียว”
       if (modalMode === 'edit' && selectedItem) {
-        const formData = new FormData(event.currentTarget)
-        const months = Number(formData.get('duration_months') || 0) || undefined
-        const purchase = String(formData.get('purchase_date') || '').trim()
-        const expiryManual = String(formData.get('expiry_date') || '').trim()
+        const months = Number(editForm?.duration_months || 0) || undefined
+        const purchase = String(editForm?.purchase_date || '').trim()
+        const expiryManual = String(editForm?.expiry_date || '').trim()
         const autoExpiry = months && purchase ? addMonthsKeepDay(purchase, months) : ''
 
-        const payload = {
-          product_name: String(formData.get('product_name') || '').trim(),
-          serial: String(formData.get('serial') || '').trim(),
-          purchase_date: purchase,
-          warranty_terms: String(formData.get('warranty_terms') || '').trim(),
-          note: String(formData.get('note') || '').trim(),
+        // ต้องส่ง multipart/form-data ให้ตรงกับ route ที่มี Multer
+        const fd = new FormData()
+        fd.append('productName', String(editForm?.product_name || '').trim())
+        fd.append('serial', String(editForm?.serial || '').trim())
+        fd.append('purchaseDate', purchase)
+        if (months !== undefined) fd.append('durationMonths', String(months))
+        if (expiryManual || autoExpiry) {
+          fd.append('expiryDate', manualExpiry ? expiryManual : (expiryManual || autoExpiry))
         }
-        if (months) payload.duration_months = months
-        if (expiryManual || autoExpiry) payload.expiry_date = expiryManual || autoExpiry
+        fd.append('coverageNote', String(editForm?.warranty_terms || '').trim())
+        fd.append('note', String(editForm?.note || '').trim())
 
-        // สำคัญ: ตอนนี้แก้ไข “รายการ” → เรียก /warranty-items/:itemId
-        const response = await api.patch(`/warranty-items/${selectedItem.id}`, payload)
-        const updatedHeader = response.data?.data?.warranty // แนะนำให้ backend ส่ง header พร้อม items กลับ
+        await api.patch(`/warranty-items/${selectedItem.id}`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+
         await fetchDashboard()
         setWarrantyModalOpen(false)
         setWarrantySubmitting(false)
         return
       }
 
-      // โหมดสร้างหลายรายการ: ส่งครั้งเดียวเป็น { items: [...] }
+      // โหมดสร้างหลายรายการในใบเดียว
       const payload = {
         items: createItems.map((it) => {
           const months = Number(it.duration_months || 0) || 12
@@ -429,7 +448,7 @@ export default function WarrantyDashboard() {
       const res = await api.post(`/store/${storeIdResolved}/warranties`, payload)
       const createdHeader = res.data?.data?.warranty
 
-      // อัปโหลดรูปให้แต่ละ “รายการ” ที่สร้าง (mapping ตามลำดับ index)
+      // อัปโหลดรูปให้แต่ละ “รายการ” ที่สร้าง
       if (createdHeader?.items?.length) {
         for (let i = 0; i < createdHeader.items.length; i++) {
           const files = createItems[i]?.images || []
@@ -468,7 +487,7 @@ export default function WarrantyDashboard() {
     }
   }
 
-  // ==== ปรับให้ upload รูปที่ “รายการ” ====
+  // อัปโหลด/ลบรูปที่ “รายการ”
   const handleImageUpload = async (files) => {
     if (!selectedItem?.id) return
     const formData = new FormData()
@@ -607,9 +626,7 @@ export default function WarrantyDashboard() {
               <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                 <SectionTitle>จัดการการรับประกัน</SectionTitle>
                 <div className="flex items-center gap-3">
-                  <div className="flex gap-2 rounded-full bg-white p-1">
-                   
-                  </div>
+                  <div className="flex gap-2 rounded-full bg-white p-1"></div>
                   <button
                     type="button"
                     onClick={() => openWarrantyModal('create')}
@@ -656,7 +673,7 @@ export default function WarrantyDashboard() {
                 </div>
               </div>
 
-              {/* การ์ดสีส้ม: แสดง “ใบ” ทั้งหมด (แต่รายละเอียดจะแสดงเฉพาะใบที่กด) */}
+              {/* การ์ดสีส้ม: แสดง “ใบ” ทั้งหมด */}
               <div className="mb-8 grid gap-4">
                 {filteredHeaders.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500">
@@ -683,9 +700,7 @@ export default function WarrantyDashboard() {
                               type="button"
                               onClick={() => header && handleDownloadPdf(header.id)}
                               disabled={!header || downloadingPdfId === header.id}
-                              className={`h-10 min-w-[96px] rounded-full bg-sky-500 px-5 text-sm font-medium text-white shadow transition ${
-                                !header || downloadingPdfId === header.id ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-400'
-                              }`}
+                              className={`h-10 min-w-[96px] rounded-full bg-sky-500 px-5 text-sm font-medium text-white shadow transition ${!header || downloadingPdfId === header.id ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-400'}`}
                             >
                               {downloadingPdfId === header.id ? 'กำลังดาวน์โหลด…' : 'PDF'}
                             </button>
@@ -699,12 +714,12 @@ export default function WarrantyDashboard() {
                           </div>
                         </div>
 
-                        {/* สรุปรายการในใบ (นับเฉพาะที่ผ่านการกรอง) */}
+                        {/* สรุปรายการในใบ */}
                         <p className="mt-4 rounded-xl bg-white/60 p-3 text-xs text-amber-700">
                           ใบนี้มีทั้งหมด {header._filteredItems?.length ?? header.items?.length ?? 0} รายการ
                         </p>
 
-                        {/* แสดงรายละเอียดเฉพาะใบนี้เมื่อกด */}
+                        {/* รายการในใบ */}
                         {expanded && (
                           <div className="mt-4 grid gap-4">
                             {(header._filteredItems || []).map((it) => (
@@ -896,9 +911,7 @@ export default function WarrantyDashboard() {
                   <button
                     type="submit"
                     disabled={profileSubmitting}
-                    className={`rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow transition ${
-                      profileSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-500'
-                    }`}
+                    className={`rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow transition ${profileSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-500'}`}
                   >
                     {profileSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
                   </button>
@@ -931,9 +944,7 @@ export default function WarrantyDashboard() {
                   <button
                     type="submit"
                     disabled={passwordSubmitting}
-                    className={`rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow transition ${
-                      passwordSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-emerald-400'
-                    }`}
+                    className={`rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow transition ${passwordSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-emerald-400'}`}
                   >
                     {passwordSubmitting ? 'กำลังบันทึก...' : 'ยืนยัน'}
                   </button>
@@ -970,12 +981,13 @@ export default function WarrantyDashboard() {
 
                 {modalMode === 'edit' ? (
                   <>
-                    {/* โหมดแก้ไข “รายการ” */}
+                    {/* ฟอร์มแก้ไขแบบ controlled + auto-expiry */}
                     <label className="text-sm text-gray-600">
                       ชื่อสินค้า
                       <input
                         name="product_name"
-                        defaultValue={selectedItem?.productName || ''}
+                        value={editForm?.product_name ?? ''}
+                        onChange={e => setEditForm(f => ({ ...f, product_name: e.target.value }))}
                         className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                         placeholder="กรอกชื่อสินค้า"
                         type="text"
@@ -988,7 +1000,15 @@ export default function WarrantyDashboard() {
                         ระยะเวลา (เดือน)
                         <select
                           name="duration_months"
-                          defaultValue={selectedItem?.durationMonths || Math.max(1, Math.round((selectedItem?.durationDays || 30) / 30))}
+                          value={editForm?.duration_months ?? 12}
+                          onChange={e => {
+                            const v = Number(e.target.value || 12)
+                            setEditForm(f => {
+                              const next = { ...f, duration_months: v }
+                              if (!manualExpiry) next.expiry_date = computeExpiry(next.purchase_date, v)
+                              return next
+                            })
+                          }}
                           className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                         >
                           {[6, 12, 18, 24].map(month => (
@@ -1001,7 +1021,8 @@ export default function WarrantyDashboard() {
                         Serial No.
                         <input
                           name="serial"
-                          defaultValue={selectedItem?.serial || ''}
+                          value={editForm?.serial ?? ''}
+                          onChange={e => setEditForm(f => ({ ...f, serial: e.target.value }))}
                           className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                           placeholder="กรอก Serial No."
                           type="text"
@@ -1015,7 +1036,15 @@ export default function WarrantyDashboard() {
                         วันเริ่ม
                         <input
                           name="purchase_date"
-                          defaultValue={selectedItem?.purchaseDate || ''}
+                          value={editForm?.purchase_date ?? ''}
+                          onChange={e => {
+                            const v = e.target.value
+                            setEditForm(f => {
+                              const next = { ...f, purchase_date: v }
+                              if (!manualExpiry) next.expiry_date = computeExpiry(v, next.duration_months)
+                              return next
+                            })
+                          }}
                           className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                           type="date"
                           required
@@ -1025,7 +1054,14 @@ export default function WarrantyDashboard() {
                         วันหมดอายุ (คำนวณอัตโนมัติหากไม่ได้แก้ไข)
                         <input
                           name="expiry_date"
-                          defaultValue={selectedItem?.expiryDate || ''}
+                          value={editForm?.expiry_date ?? ''}
+                          onChange={e => {
+                            setManualExpiry(true)
+                            setEditForm(f => ({ ...f, expiry_date: e.target.value }))
+                          }}
+                          onBlur={() => {
+                            setManualExpiry(prev => (editForm?.expiry_date ? prev : false))
+                          }}
                           className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                           type="date"
                         />
@@ -1036,7 +1072,8 @@ export default function WarrantyDashboard() {
                       เงื่อนไขการรับประกัน
                       <textarea
                         name="warranty_terms"
-                        defaultValue={selectedItem?.coverageNote || ''}
+                        value={editForm?.warranty_terms ?? ''}
+                        onChange={e => setEditForm(f => ({ ...f, warranty_terms: e.target.value }))}
                         className="mt-1 min-h-[96px] w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                         placeholder="กรอกเงื่อนไขการรับประกัน"
                         required
@@ -1201,9 +1238,7 @@ export default function WarrantyDashboard() {
                   <button
                     type="submit"
                     disabled={warrantySubmitting}
-                    className={`rounded-full bg-sky-600 px-6 py-2 text-sm font-semibold text-white shadow transition ${
-                      warrantySubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-500'
-                    }`}
+                    className={`rounded-full bg-sky-600 px-6 py-2 text-sm font-semibold text-white shadow transition ${warrantySubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-500'}`}
                   >
                     {warrantySubmitting ? 'กำลังบันทึก...' : modalMode === 'create' ? 'บันทึก' : 'ยืนยัน'}
                   </button>
