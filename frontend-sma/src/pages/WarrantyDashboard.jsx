@@ -608,8 +608,7 @@ export default function WarrantyDashboard() {
                 <SectionTitle>จัดการการรับประกัน</SectionTitle>
                 <div className="flex items-center gap-3">
                   <div className="flex gap-2 rounded-full bg-white p-1">
-                    <button className="rounded-full px-4 py-1 text-sm font-medium text-gray-400 shadow-sm">ภาพรวม</button>
-                    <button className="rounded-full bg-sky-100 px-4 py-1 text-sm font-medium text-sky-700 shadow">การรับประกัน</button>
+                   
                   </div>
                   <button
                     type="button"
@@ -628,7 +627,7 @@ export default function WarrantyDashboard() {
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
                     className="w-full bg-transparent px-3 py-2 text-sm focus:outline-none"
-                    placeholder="ค้นหาด้วยโค้ดใบรับประกัน, ชื่อลูกค้า, อีเมลลูกค้า, ชื่อสินค้า"
+                    placeholder="ค้นหาด้วยรหัสใบรับประกัน, ชื่อลูกค้า, อีเมลลูกค้า, ชื่อสินค้า"
                   />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -672,7 +671,7 @@ export default function WarrantyDashboard() {
                           <div className="flex-1">
                             <div className="text-lg font-semibold text-gray-900">Warranty Card</div>
                             <div className="mt-2 grid gap-1 text-sm text-gray-700 md:grid-cols-2">
-                              <div>โค้ดใบรับประกัน: <span className="font-medium text-gray-900">{header.code || '-'}</span></div>
+                              <div>รหัสใบรับประกัน: <span className="font-medium text-gray-900">{header.code || '-'}</span></div>
                               <div>ลูกค้า: <span className="font-medium text-gray-900">{header.customerName || '-'}</span></div>
                               <div>เบอร์โทรศัพท์: <span className="font-medium text-gray-900">{header.customerPhone || '-'}</span></div>
                               <div>อีเมลลูกค้า: <span className="font-medium text-gray-900">{header.customerEmail || '-'}</span></div>
