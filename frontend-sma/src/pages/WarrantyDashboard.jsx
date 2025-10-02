@@ -1,3 +1,4 @@
+// frontend-sma/src/pages/WarrantyDashboard.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -106,7 +107,7 @@ export default function WarrantyDashboard() {
     return Number(user.sub ?? user.id ?? null)
   }, [user])
 
-  // NOTE: ตอนนี้ warranties = “ใบรับประกัน (Header)” แต่ละใบมี items อยู่ใน field .items
+  // NOTE: warranties = “ใบรับประกัน (Header)” แต่ละใบมี items อยู่ใน field .items
   const [warranties, setWarranties] = useState([])
   const [filters, setFilters] = useState(defaultFilters)
   const [activeFilter, setActiveFilter] = useState('all')
@@ -134,7 +135,7 @@ export default function WarrantyDashboard() {
   const [isWarrantyModalOpen, setWarrantyModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState('create')
 
-  // ==== เปลี่ยนจาก “selectedWarranty” → “selectedItem” (แก้ไขระดับรายการสินค้า)
+  // แก้ไขระดับ “รายการสินค้า”
   const [selectedItem, setSelectedItem] = useState(null)
 
   // แสดง/ซ่อนรายละเอียดต่อ “ใบ”
@@ -151,7 +152,7 @@ export default function WarrantyDashboard() {
 
   const profileAvatarSrc = profileImage.preview || storeProfile.avatarUrl || ''
 
-  /* ---------- สำหรับสร้างหลายสินค้าในใบเดียว + auto expiry ---------- */
+  /* ---------- สร้างหลายสินค้าในใบเดียว + auto expiry ---------- */
   const makeItem = (seedSN = null) => ({
     customer_email: '',
     product_name: '',
@@ -198,22 +199,40 @@ export default function WarrantyDashboard() {
   const filteredHeaders = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
 
-    return (warranties || []).map(header => {
-      const items = (header.items || []).filter(it => {
-        const code = it.statusCode || STATUS_CODE_BY_LABEL[it.statusTag] || deriveItemStatusCode(it, storeProfile.notifyDaysInAdvance)
-        const passFilter = activeFilter === 'all' ? true : code === activeFilter
-
-        const hay = [
+    return (warranties || [])
+      .map(header => {
+        // คำค้นระดับ "ใบ"
+        const headerHay = [
           header.code, header.customerName, header.customerEmail, header.customerPhone,
-          it.productName, it.serial, it.coverageNote, it.note
         ].map(x => String(x || '').toLowerCase())
-        const passSearch = term ? hay.some(s => s.includes(term)) : true
+        const headerMatch = term ? headerHay.some(s => s.includes(term)) : false
 
-        return passFilter && passSearch
+        const items = (header.items || []).filter(it => {
+          const code =
+            it.statusCode ||
+            STATUS_CODE_BY_LABEL[it.statusTag] ||
+            deriveItemStatusCode(it, storeProfile.notifyDaysInAdvance)
+
+          const passStatus = activeFilter === 'all' ? true : code === activeFilter
+          if (!passStatus) return false
+
+          // “ทั้งหมด” + คำค้นตรงกับตัวใบ → แสดงสินค้าทั้งใบ
+          if (headerMatch && activeFilter === 'all') return true
+
+          // ตรวจคำค้นระดับ "สินค้า"
+          const itemHay = [
+            it.productName, it.serial, it.coverageNote, it.note
+          ].map(x => String(x || '').toLowerCase())
+
+          const passSearch = term ? itemHay.some(s => s.includes(term)) : true
+
+          // <<< จุดแก้ >>> ให้แท็บอื่นๆ โชว์รายการในใบนั้นที่ผ่านสถานะ แม้คำค้นจะตรงแค่ตัวใบ
+          return passSearch || headerMatch
+        })
+
+        return { ...header, _filteredItems: items, _headerMatch: headerMatch }
       })
-
-      return { ...header, _filteredItems: items }
-    }).filter(h => h._filteredItems.length > 0 || activeFilter === 'all' ? true : false)
+      .filter(h => h._filteredItems.length > 0)
   }, [warranties, activeFilter, searchTerm, storeProfile.notifyDaysInAdvance])
 
   const openProfileModal = () => {
@@ -278,9 +297,7 @@ export default function WarrantyDashboard() {
         seen.add(option.value)
         merged.push(option)
       }
-      if (merged.length === 1) {
-        merged.push(...defaultFilters.slice(1))
-      }
+      if (merged.length === 1) merged.push(...defaultFilters.slice(1))
       setFilters(merged)
       setActiveFilter((current) => (merged.some((option) => option.value === current) ? current : 'all'))
       setDashboardError('')
@@ -322,7 +339,7 @@ export default function WarrantyDashboard() {
         warranty_terms: item.coverageNote || '',
         note: item.note || '',
       })
-      setManualExpiry(false) // ให้ auto คำนวณจนกว่าผู้ใช้จะแก้ expiry เอง
+      setManualExpiry(false)
     }
 
     setWarrantyModalOpen(true)
@@ -398,14 +415,12 @@ export default function WarrantyDashboard() {
     setWarrantyModalError('')
 
     try {
-      // โหมดแก้ไข -> “รายการเดียว”
       if (modalMode === 'edit' && selectedItem) {
         const months = Number(editForm?.duration_months || 0) || undefined
         const purchase = String(editForm?.purchase_date || '').trim()
         const expiryManual = String(editForm?.expiry_date || '').trim()
         const autoExpiry = months && purchase ? addMonthsKeepDay(purchase, months) : ''
 
-        // ต้องส่ง multipart/form-data ให้ตรงกับ route ที่มี Multer
         const fd = new FormData()
         fd.append('productName', String(editForm?.product_name || '').trim())
         fd.append('serial', String(editForm?.serial || '').trim())
@@ -673,7 +688,7 @@ export default function WarrantyDashboard() {
                 </div>
               </div>
 
-              {/* การ์ดสีส้ม: แสดง “ใบ” ทั้งหมด */}
+              {/* การ์ดสีส้ม: แสดงใบที่มีรายการผ่านเงื่อนไข */}
               <div className="mb-8 grid gap-4">
                 {filteredHeaders.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500">
