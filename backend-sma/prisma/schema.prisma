@@ -57,8 +57,6 @@ model StoreProfile {
   isConsent           Boolean  @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
-
-  
 }
 
 model VerificationToken {
@@ -81,12 +79,11 @@ model PasswordResetToken {
   usedAt    DateTime?
 }
 
-
 model Warranty {
   id            String         @id @default(cuid())
   storeId       Int
   store         User           @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  code          String         @unique
+  code          String         // เดิม @unique (ลบออก)
   customerEmail String?        // เก็บระดับใบ (ใช้ของรายการแรก ถ้า UI แยกก็ได้)
   customerName  String?
   customerPhone String?
@@ -95,6 +92,9 @@ model Warranty {
   updatedAt     DateTime       @updatedAt
 
   items         WarrantyItem[]
+
+  /// ทำให้ WR ยูนีค “แยกร้าน”
+  @@unique([storeId, code], name: "storeId_code")
 }
 
 model WarrantyItem {
@@ -103,7 +103,7 @@ model WarrantyItem {
   warranty       Warranty @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
 
   productName    String
-  serial         String?
+  serial         String?  // ยังเป็น optional เพื่อไม่ทำลายข้อมูลเก่า แต่เราจะ auto-fill ตอนสร้างใหม่
   purchaseDate   DateTime
   expiryDate     DateTime?
   durationMonths Int?
@@ -115,4 +115,7 @@ model WarrantyItem {
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  /// ทำให้ SN ยูนีค “ภายในใบเดียวกัน” (ถ้าเป็นค่าไม่-null)
+  @@unique([warrantyId, serial], name: "warrantyId_serial")
 }

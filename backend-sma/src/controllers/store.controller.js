@@ -57,11 +57,22 @@ function pad3(n) {
   return s.length >= 3 ? s : "0".repeat(3 - s.length) + s;
 }
 
-// ---------- เปลี่ยนจาก "นับแยกร้าน" เป็น "นับรวมทั้งระบบ" ----------
-async function nextWarrantyCodeGlobal(tx, { prefix = "WR", width = 3 } = {}) {
-  // หา code สูงสุดทั้งระบบที่ขึ้นต้นด้วย prefix (ไม่ filter ตามร้าน)
+function daysBetween(a, b) {
+  const diff = Math.ceil((b.getTime() - a.getTime()) / (24 * 3600 * 1000));
+  return diff;
+}
+
+function addMonths(date, m) {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + m);
+  return d;
+}
+
+/** ===== ออกเลข WR “แยกร้าน” ===== */
+async function nextWarrantyCodeForStore(tx, storeId, { prefix = "WR", width = 3 } = {}) {
+  // หาเลข code ล่าสุดของ "ร้านนี้" ที่ขึ้นต้นด้วย prefix แล้ว +1
   const last = await tx.warranty.findFirst({
-    where: { code: { startsWith: prefix } },
+    where: { storeId, code: { startsWith: prefix } },
     orderBy: { code: "desc" },
     select: { code: true },
   });
@@ -74,26 +85,16 @@ async function nextWarrantyCodeGlobal(tx, { prefix = "WR", width = 3 } = {}) {
   return `${prefix}${pad3(lastNum + 1)}`;
 }
 
-// กันชนกรณีชนพร้อมกัน (retry ถ้าโดน P2002)
-async function allocateWarrantyCode(tx, opts) {
+// กันชนกรณีชนพร้อมกัน (retry ถ้าโดน P2002) – ใช้ composite unique [storeId, code]
+async function allocateWarrantyCode(tx, storeId, opts) {
   for (let i = 0; i < 5; i++) {
-    const code = await nextWarrantyCodeGlobal(tx, opts);
-    const exists = await tx.warranty.findUnique({ where: { code } });
+    const code = await nextWarrantyCodeForStore(tx, storeId, opts);
+    const exists = await tx.warranty.findUnique({
+      where: { storeId_code: { storeId, code } },
+    });
     if (!exists) return code;
-    // ถ้ามีอยู่แล้ว ให้ลองอีกรอบ
   }
   throw new Error("Unable to allocate warranty code");
-}
-
-function daysBetween(a, b) {
-  const diff = Math.ceil((b.getTime() - a.getTime()) / (24 * 3600 * 1000));
-  return diff;
-}
-
-function addMonths(date, m) {
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + m);
-  return d;
 }
 
 /** map header + items => payload response ฝั่งหน้า */
@@ -101,13 +102,12 @@ function mapWarrantyHeaderForResponse(header, notifyDays) {
   return {
     id: header.id,
     code: header.code,
-    customerEmail: header.customerEmail ?? null, // ✅ ใช้จาก header เท่านั้น
+    customerEmail: header.customerEmail ?? null,
     customerName: header.customerName ?? null,
     customerPhone: header.customerPhone ?? null,
     createdAt: header.createdAt,
     updatedAt: header.updatedAt,
 
-    // ทำรายการย่อย
     items: (header.items || []).map((w) => {
       const today = new Date();
       const exp = w.expiryDate ? new Date(w.expiryDate) : null;
@@ -210,7 +210,7 @@ export async function getStoreDashboard(req, res) {
 
     return sendSuccess(res, {
       storeProfile: mapStoreProfile(store.storeProfile, store.email),
-      warranties: mapped, // ตอนนี้เป็น “ใบ” และแต่ละใบมี items ภายใน
+      warranties: mapped,
       filters,
     });
   } catch (error) {
@@ -316,10 +316,13 @@ export async function changeStorePassword(req, res) {
 }
 
 /**
- * NEW: สร้างใบรับประกัน “ใบเดียว” แต่รับ items หลายรายการ
- * รองรับ 2 รูปแบบ
- *  - payload ใหม่: { items: [...items] }  → จะสร้าง Header เดียว + หลาย items
- *  - payload เดิม (รายการเดียว)          → จะสร้าง Header ใหม่ 1 ใบ + 1 item
+ * สร้างใบรับประกัน “ใบเดียว” แต่รับ items หลายรายการ
+ * รองรับ 2 รูปแบบ:
+ *  - payload ใหม่: { items: [...items] }  → สร้าง Header เดียว + หลาย items
+ *  - payload เดิม (รายการเดียว)          → สร้าง Header ใหม่ 1 ใบ + 1 item
+ * ปรับเพิ่ม:
+ *  - WR: ออกเลขแบบ "แยกร้าน" (per store) ด้วย composite unique [storeId, code]
+ *  - SN: auto-generate เป็น SN001, SN002, ... และ "ยูนีคภายในใบเดียวกัน"
  */
 export async function createWarranty(req, res) {
   const storeId = parseStoreId(req, res);
@@ -332,14 +335,17 @@ export async function createWarranty(req, res) {
 
     // ใช้ทรานแซคชัน + กัน P2002
     const createdHeader = await prisma.$transaction(async (tx) => {
-      // สร้าง code แบบ global
-      let code = await allocateWarrantyCode(tx, { prefix: "WR", width: 3 });
+      // ★ สร้าง code แบบ "แยกร้าน"
+      let code = await allocateWarrantyCode(tx, storeId, { prefix: "WR", width: 3 });
 
       // --- payload หลายรายการในใบเดียว ---
       if (Array.isArray(body.items) && body.items.length > 0) {
         const first = body.items[0];
 
-        // สร้าง payload items
+        // ★ กัน serial ซ้ำในคำขอ + auto SNxxx
+        const usedSerial = new Set();
+        let seq = 1;
+
         const itemsToCreate = body.items.map((it) => {
           const purchase = it.purchase_date ? new Date(it.purchase_date) : new Date();
           let expiry = it.expiry_date ? new Date(it.expiry_date) : null;
@@ -347,16 +353,35 @@ export async function createWarranty(req, res) {
           if (!expiry && dm > 0) {
             expiry = addMonths(purchase, dm);
           }
+
+          let serial = String(it.serial || "").trim();
+          if (!serial) {
+            while (usedSerial.has(`SN${pad3(seq)}`)) seq++;
+            serial = `SN${pad3(seq)}`;
+            usedSerial.add(serial);
+            seq++;
+          } else {
+            if (usedSerial.has(serial)) {
+              // ถ้าซ้ำใน request เดียว ปรับเป็น SN อัตโนมัติ
+              while (usedSerial.has(`SN${pad3(seq)}`)) seq++;
+              serial = `SN${pad3(seq)}`;
+              usedSerial.add(serial);
+              seq++;
+            } else {
+              usedSerial.add(serial);
+            }
+          }
+
           return {
             productName: String(it.product_name || "").trim(),
-            serial: String(it.serial || "").trim() || null,
+            serial, // จะเป็น non-null แล้ว
             purchaseDate: purchase,
             expiryDate: expiry,
             durationMonths: dm || null,
             durationDays: expiry ? daysBetween(purchase, expiry) : null,
             coverageNote: String(it.warranty_terms || "").trim() || null,
             note: String(it.note || "").trim() || null,
-            images: [],
+            images: [], // Json? ที่ schema รองรับ
           };
         });
 
@@ -375,9 +400,17 @@ export async function createWarranty(req, res) {
               include: { items: true },
             });
           } catch (e) {
-            if (e?.code === "P2002" && e.meta?.target?.includes?.("code")) {
-              code = await allocateWarrantyCode(tx, { prefix: "WR", width: 3 });
+            // ซ้ำรหัสใบรับประกัน (คีย์ใหม่ storeId_code หรือกรณีเก่ายังมี code)
+            if (
+              e?.code === "P2002" &&
+              (e.meta?.target?.includes?.("storeId_code") || e.meta?.target?.includes?.("code"))
+            ) {
+              code = await allocateWarrantyCode(tx, storeId, { prefix: "WR", width: 3 });
               continue;
+            }
+            // SN ซ้ำภายในใบเดียวกัน (DB guard)
+            if (e?.code === "P2002" && e.meta?.target?.includes?.("warrantyId_serial")) {
+              throw Object.assign(new Error("Serial number duplicated within the warranty"), { status: 409 });
             }
             throw e;
           }
@@ -391,6 +424,9 @@ export async function createWarranty(req, res) {
       const dm = Number(body.duration_months || body.durationMonths || 0);
       if (!expiry && dm > 0) expiry = addMonths(purchase, dm);
 
+      // ★ SN อัตโนมัติถ้าไม่ส่งมา → SN001
+      const serialOne = (String(body.serial || "").trim() || `SN${pad3(1)}`);
+
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           return await tx.warranty.create({
@@ -402,7 +438,7 @@ export async function createWarranty(req, res) {
                 create: [
                   {
                     productName: String(body.product_name || "").trim(),
-                    serial: String(body.serial || "").trim() || null,
+                    serial: serialOne,
                     purchaseDate: purchase,
                     expiryDate: expiry,
                     durationMonths: dm || null,
@@ -417,9 +453,15 @@ export async function createWarranty(req, res) {
             include: { items: true },
           });
         } catch (e) {
-          if (e?.code === "P2002" && e.meta?.target?.includes?.("code")) {
-            code = await allocateWarrantyCode(tx, { prefix: "WR", width: 3 });
+          if (
+            e?.code === "P2002" &&
+            (e.meta?.target?.includes?.("storeId_code") || e.meta?.target?.includes?.("code"))
+          ) {
+            code = await allocateWarrantyCode(tx, storeId, { prefix: "WR", width: 3 });
             continue;
+          }
+          if (e?.code === "P2002" && e.meta?.target?.includes?.("warrantyId_serial")) {
+            throw Object.assign(new Error("Serial number duplicated within the warranty"), { status: 409 });
           }
           throw e;
         }
@@ -437,7 +479,13 @@ export async function createWarranty(req, res) {
     );
   } catch (error) {
     // แปลง duplicate เป็น 409 ให้เข้าใจง่าย
-    if (error?.code === "P2002" && error.meta?.target?.includes?.("code")) {
+    if (error?.status) {
+      return sendError(res, error.status, error.message);
+    }
+    if (error?.code === "P2002" && error.meta?.target?.includes?.("warrantyId_serial")) {
+      return sendError(res, 409, "Serial ซ้ำภายในใบรับประกัน");
+    }
+    if (error?.code === "P2002" && (error.meta?.target?.includes?.("storeId_code") || error.meta?.target?.includes?.("code"))) {
       return sendError(res, 409, "รหัสใบรับประกันซ้ำ กรุณาลองใหม่");
     }
     console.error("createWarranty error", error);

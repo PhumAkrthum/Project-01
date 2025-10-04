@@ -1,4 +1,4 @@
-// src/main.jsx (หรือไฟล์ที่คุณใช้สร้าง Router หลัก)
+// src/main.jsx
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import {
@@ -17,6 +17,7 @@ import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
 import VerifyEmail from './pages/VerifyEmail'
 import WarrantyDashboard from './pages/WarrantyDashboard'
+import CustomerWarranty from './pages/CustomerWarranty.jsx' // ★ เพิ่ม
 
 /** ===== Helpers / Guards ===== */
 function decodeJwt(token) {
@@ -37,6 +38,23 @@ function ProtectedStoreRoute({ children }) {
     return <Navigate to="/signin" replace state={{ from: location }} />
   }
   if (role !== 'STORE') {
+    return <Navigate to="/" replace />
+  }
+  return children
+}
+
+// ★ ใหม่: guard สำหรับลูกค้า
+function ProtectedCustomerRoute({ children }) {
+  const location = useLocation()
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+  const role = token ? decodeJwt(token)?.role : null
+
+  if (!token) {
+    return <Navigate to="/signin" replace state={{ from: location }} />
+  }
+  if (role !== 'CUSTOMER') {
+    // ถ้าเป็นร้านอยู่แล้วให้ไปแดชบอร์ดร้าน
+    if (role === 'STORE') return <Navigate to="/dashboard/warranty" replace />
     return <Navigate to="/" replace />
   }
   return children
@@ -65,13 +83,23 @@ const router = createBrowserRouter([
       { path: '/signup', element: <SignUp /> },
       { path: '/verify-email', element: <VerifyEmail /> },
 
-      // Dashboard (ใช้ Guard กัน role ให้เป็นร้านค้าเท่านั้น)
+      // Dashboard ร้าน (STORE)
       {
         path: '/dashboard/warranty',
         element: (
           <ProtectedStoreRoute>
             <WarrantyDashboard />
           </ProtectedStoreRoute>
+        ),
+      },
+
+      // ★ หน้า "ใบรับประกันของฉัน" สำหรับลูกค้า (CUSTOMER)
+      {
+        path: '/customer/warranties',
+        element: (
+          <ProtectedCustomerRoute>
+            <CustomerWarranty />
+          </ProtectedCustomerRoute>
         ),
       },
     ],
