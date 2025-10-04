@@ -13,31 +13,35 @@ enum Role {
 }
 
 model User {
-  id               Int       @id @default(autoincrement())
-  email            String    @unique
-  passwordHash     String
-  role             Role
-  emailVerifiedAt  DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id              Int       @id @default(autoincrement())
+  email           String    @unique
+  passwordHash    String
+  role            Role
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  customerProfile  CustomerProfile?
-  storeProfile     StoreProfile?
+  customerProfile CustomerProfile?
+  storeProfile    StoreProfile?
 
   verificationTokens VerificationToken[]
   resetTokens        PasswordResetToken[]
 
-  warranties        Warranty[]      // ใบรับประกัน (Header) ทั้งหมดของร้านนี้
+  // ใบรับประกันที่ "ร้าน" นี้ออก (Header)
+  warranties Warranty[]
+
+  // ★ เพิ่ม: ใบรับประกันที่ "ลูกค้าคนนี้เป็นเจ้าของ"
+  customerWarranties Warranty[] @relation("CustomerWarranties")
 }
 
 model CustomerProfile {
-  id          Int     @id @default(autoincrement())
-  userId      Int     @unique
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  firstName   String
-  lastName    String
-  phone       String
-  isConsent   Boolean @default(false)
+  id        Int     @id @default(autoincrement())
+  userId    Int     @unique
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName String
+  lastName  String
+  phone     String
+  isConsent Boolean @default(false)
 }
 
 model StoreProfile {
@@ -60,50 +64,56 @@ model StoreProfile {
 }
 
 model VerificationToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
+  id        Int       @id @default(autoincrement())
+  token     String    @unique
   userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   usedAt    DateTime?
 }
 
 model PasswordResetToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
+  id        Int       @id @default(autoincrement())
+  token     String    @unique
   userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   usedAt    DateTime?
 }
 
 model Warranty {
-  id            String         @id @default(cuid())
-  storeId       Int
-  store         User           @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  code          String         // เดิม @unique (ลบออก)
-  customerEmail String?        // เก็บระดับใบ (ใช้ของรายการแรก ถ้า UI แยกก็ได้)
+  id      String @id @default(cuid())
+  storeId Int
+  store   User   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  code          String // เดิมเคย @unique → ใช้ unique แบบแยกร้านด้านล่าง
+  customerEmail String? // เก็บเพื่อความเข้ากันได้ (ข้อมูลเก่า)
   customerName  String?
   customerPhone String?
 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  // ★ เพิ่ม: FK ไปยังบัญชีลูกค้า (ถ้าเจออีเมลที่เป็น CUSTOMER)
+  customerUserId Int?
+  customer       User? @relation("CustomerWarranties", fields: [customerUserId], references: [id], onDelete: SetNull)
 
-  items         WarrantyItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items WarrantyItem[]
 
   /// ทำให้ WR ยูนีค “แยกร้าน”
   @@unique([storeId, code], name: "storeId_code")
+  @@index([customerUserId])
 }
 
 model WarrantyItem {
-  id             String   @id @default(cuid())
-  warrantyId     String
-  warranty       Warranty @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  warrantyId String
+  warranty   Warranty @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
 
   productName    String
-  serial         String?  // ยังเป็น optional เพื่อไม่ทำลายข้อมูลเก่า แต่เราจะ auto-fill ตอนสร้างใหม่
+  serial         String? // อนุโลมข้อมูลเก่า
   purchaseDate   DateTime
   expiryDate     DateTime?
   durationMonths Int?
@@ -111,10 +121,13 @@ model WarrantyItem {
   coverageNote   String?
   note           String?
   documents      Json?
-  images         Json?     // เก็บ array ของ image URLs
+  images         Json? // เก็บ array ของ image URLs
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  // ★ เพิ่ม: หมายเหตุโดย "ลูกค้า"
+  customerNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   /// ทำให้ SN ยูนีค “ภายในใบเดียวกัน” (ถ้าเป็นค่าไม่-null)
   @@unique([warrantyId, serial], name: "warrantyId_serial")

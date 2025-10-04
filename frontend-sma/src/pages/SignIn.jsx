@@ -1,4 +1,3 @@
-// frontend-sma/src/pages/SignIn.jsx
 import { useEffect, useState } from "react";
 import { Link, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
@@ -84,13 +83,14 @@ function Tabs({ value, onChange }) {
   );
 }
 
-// helper: ถอด payload จาก JWT เพื่ออ่าน role
+// ===== helper: ถอด role จาก JWT (รองรับ padding) =====
 function decodeRoleFromToken(token) {
   try {
-    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    const json = atob(base64);
-    const payload = JSON.parse(json);
-    return payload?.role || null;
+    if (!token) return null;
+    let base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) base64 += "=";
+    const payload = JSON.parse(atob(base64));
+    return String(payload?.role || payload?.user?.role || payload?.claims?.role || "").toUpperCase();
   } catch {
     return null;
   }
@@ -119,7 +119,7 @@ export default function SignIn() {
     const fd = new FormData(e.currentTarget);
     const payload = { email: fd.get("email"), password: fd.get("password") };
     try {
-      const { data } = await api.post("/auth/login", payload);
+      const { data } = await api.post("/auth/login", payload); // ใช้เอ็นด์พอยต์ของคุณ
       const token = data?.token;
       if (!token) {
         setError("เข้าสู่ระบบไม่สำเร็จ: ไม่พบโทเคน");
@@ -127,16 +127,15 @@ export default function SignIn() {
         return;
       }
 
-      // เก็บ token และตั้ง header ให้ทุกคำขอถัดไป
+      // เก็บ token
       localStorage.setItem("token", token);
       api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       if (setToken) setToken(token);
 
-      // ✅ บังคับแยกฝั่ง: role ที่ JWT vs แท็บที่ผู้ใช้เลือก
-      const role = decodeRoleFromToken(token); // เช่น "STORE" หรือ "CUSTOMER"
+      // ตรวจ role ให้ตรงกับแท็บ
+      const role = decodeRoleFromToken(token); // "STORE" | "CUSTOMER"
       const expected = tab === "store" ? "STORE" : "CUSTOMER";
       if (role !== expected) {
-        // เคลียร์ token และแจ้งว่าไม่พบบัญชีทางฝั่งนี้
         localStorage.removeItem("token");
         delete api.defaults.headers.common["Authorization"];
         setError("ไม่พบบัญชีทางฝั่งนี้ (บัญชีนี้เป็นของอีกฝั่ง)");
@@ -144,22 +143,19 @@ export default function SignIn() {
         return;
       }
 
-      // ถ้ามีเส้นทางจากหน้าเดิม ให้กลับไปที่นั่นก่อน
-      let redirectTo = location.state?.from?.pathname || null;
-
-      // ถ้าไม่มี ให้พาไปตาม role
-      if (!redirectTo) {
-        redirectTo = role === "STORE" ? "/dashboard/warranty" : "/";
-      }
+      // ===== จุดแก้หลัก: คำนวณปลายทาง =====
+      const nextParam = params.get("next"); // เช่น /customer/warranties
+      let redirectTo =
+        location.state?.from?.pathname ||
+        nextParam ||
+        (role === "STORE" ? "/dashboard/warranty" : "/customer/warranties"); // ← เดิมใส่ "/"
 
       navigate(redirectTo, { replace: true });
     } catch (err) {
       const status = err?.response?.status;
       const body = err?.response?.data || {};
-
-      // ถ้ายังไม่ verify -> ส่งไปหน้า verify email
       if (status === 403 && body?.needsVerify) {
-        const verifyUrl = body?.verifyUrl; // dev mode อาจมี
+        const verifyUrl = body?.verifyUrl;
         const q = new URLSearchParams();
         q.set("email", payload.email || "");
         if (verifyUrl) q.set("preview", verifyUrl);

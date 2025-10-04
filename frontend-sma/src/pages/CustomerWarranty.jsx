@@ -1,198 +1,258 @@
-// frontend-sma/src/pages/CustomerWarranty.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '../lib/api';
+import { useAuth } from '../store/auth';
 
-const api = (path, opts={}) => {
-  const token = localStorage.getItem("token");
-  return fetch(path, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      ...(opts.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
+const STATUS_LABEL = {
+  active: 'ใช้งานได้',
+  nearing_expiration: 'ใกล้หมดอายุ',
+  expired: 'หมดอายุ',
 };
 
-function StatusPill({ code }) {
-  const map = {
-    active: { label: "ใช้งานได้", class: "bg-emerald-50 text-emerald-700" },
-    nearing_expiration: { label: "ใกล้หมดอายุ", class: "bg-amber-50 text-amber-700" },
-    expired: { label: "หมดอายุ", class: "bg-rose-50 text-rose-700" },
-  };
-  const s = map[code] || map.active;
-  return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.class}`}>{s.label}</span>;
+const FILTERS = [
+  { value: 'all', label: 'ทั้งหมด' },
+  { value: 'active', label: 'ใช้งานได้' },
+  { value: 'nearing_expiration', label: 'ใกล้หมดอายุ' },
+  { value: 'expired', label: 'หมดอายุ' },
+];
+
+function fmt(d) {
+  try { return new Date(d).toLocaleDateString(); } catch { return '-'; }
 }
 
-function NoteModal({ open, onClose, onSave, defaultValue }) {
-  const [val, setVal] = useState(defaultValue || "");
-  useEffect(()=>{ setVal(defaultValue || ""); }, [defaultValue, open]);
-  if (!open) return null;
+export default function CustomerWarranty() {
+  const { user } = useAuth();
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [totals, setTotals] = useState({ all: 0, active: 0, nearing_expiration: 0, expired: 0 });
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null, name: '', note: '' });
+
+  async function fetchData() {
+    setLoading(true);
+    try {
+      const r = await api.get('/customer/warranties', { params: { q: query, status: filter } });
+      setTotals(r.data.totals);
+      setData(r.data.data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchData(); /* eslint-disable-next-line */ }, [filter]);
+
+  // flatten เพื่อแสดง “ระดับรายการสินค้า”
+  const flatItems = useMemo(() => {
+    const rows = [];
+    data.forEach(w => {
+      const storeName = w.store?.storeProfile?.storeName || '-';
+      const phone = w.store?.storeProfile?.phone || '-';
+      (w.items || []).forEach(it => {
+        rows.push({
+          warrantyId: w.id,
+          code: w.code,
+          status: it._status,
+          daysLeft: it._daysLeft,
+          storeName,
+          phone,
+          item: it,
+        });
+      });
+    });
+    return rows;
+  }, [data]);
+
+  async function onSaveNote() {
+    await api.patch(`/customer/warranty-items/${noteModal.itemId}/note`, { note: noteModal.note });
+    setNoteModal({ open: false, itemId: null, name: '', note: '' });
+    fetchData();
+  }
+
+  const StatusPill = ({ status }) => {
+    const map = {
+      active: 'bg-green-100 text-green-800',
+      nearing_expiration: 'bg-amber-100 text-amber-800',
+      expired: 'bg-red-100 text-red-800',
+    };
+    return (
+      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${map[status] || ''}`}>
+        {STATUS_LABEL[status] || '-'}
+      </span>
+    );
+  };
+
+  function firstImageSrc(images) {
+    if (!images) return null;
+    if (Array.isArray(images) && images.length) {
+      const first = images[0];
+      if (typeof first === 'string') return absolutize(first);
+      if (first?.url) return absolutize(first.url);
+      if (first?.path) return absolutize(first.path);
+    }
+    return null;
+  }
+
+  function absolutize(p) {
+    if (!p) return null;
+    if (/^https?:\/\//i.test(p)) return p;
+    const base = api.defaults.baseURL.replace(/\/$/, '');
+    return `${base}/${String(p).replace(/^\/+/, '')}`;
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-      <div className="bg-white w-[520px] rounded-xl shadow-xl p-5">
-        <div className="text-lg font-semibold mb-2">เพิ่มหมายเหตุ</div>
-        <textarea className="w-full border rounded-lg p-3 min-h-[120px]" value={val} onChange={e=>setVal(e.target.value)} placeholder="พิมพ์หมายเหตุของคุณ"/>
-        <div className="flex justify-end gap-2 mt-3">
-          <button className="px-3 py-2 rounded-lg border" onClick={onClose}>ยกเลิก</button>
-          <button className="px-3 py-2 rounded-lg bg-blue-600 text-white" onClick={()=>onSave(val)}>บันทึก</button>
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      <header className="mb-6">
+        <h1 className="text-2xl font-bold">Warranty</h1>
+        <p className="text-gray-600 mt-1">
+          ยินดีต้อนรับ, คุณ{user?.customerProfile?.firstName || ''} {user?.customerProfile?.lastName || ''}
+        </p>
+      </header>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <SummaryCard label="ในระบบทั้งหมด" value={totals.all} />
+        <SummaryCard label="ใช้งานได้" value={totals.active} tone="green" />
+        <SummaryCard label="ใกล้หมดอายุ" value={totals.nearing_expiration} tone="amber" />
+        <SummaryCard label="หมดอายุ" value={totals.expired} tone="red" />
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center mb-4">
+        <div className="flex-1">
+          <div className="relative">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ค้นหาด้วยชื่อสินค้า, ร้านค้า, รหัสรับประกัน"
+              className="w-full rounded-xl border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <button onClick={fetchData} className="absolute right-1 top-1 bottom-1 px-4 rounded-lg bg-blue-600 text-white text-sm">
+              ค้นหา
+            </button>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {FILTERS.map(f => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={`px-3 py-1.5 rounded-full border text-sm ${
+                filter === f.value ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border-gray-300'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
       </div>
+
+      {loading ? (
+        <div className="p-6 text-center text-gray-500">กำลังโหลด...</div>
+      ) : flatItems.length === 0 ? (
+        <div className="p-6 text-center text-gray-500 bg-white rounded-xl shadow-sm">ไม่พบข้อมูล</div>
+      ) : (
+        <div className="space-y-4">
+          {flatItems.map(row => {
+            const img = firstImageSrc(row.item.images);
+            return (
+              <article key={`${row.warrantyId}-${row.item.id}`} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-1">
+                      <h3 className="text-lg font-semibold">{row.item.productName}</h3>
+                      <StatusPill status={row.status} />
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-y-1 text-sm">
+                      <Field label="รหัสรับประกัน" value={row.code} />
+                      <Field label="ร้านค้า" value={row.storeName} />
+                      <Field label="เบอร์โทรศัพท์" value={row.phone} />
+                      <Field label="เวลาที่เหลือ" value={row.status === 'expired' ? 'หมดอายุ' : `${row.daysLeft ?? '-'} วัน`} />
+                      <Field label="วันที่ซื้อ" value={fmt(row.item.purchaseDate)} />
+                      <Field label="วันหมดอายุ" value={fmt(row.item.expiryDate)} />
+                      <Field label="เงื่อนไขการรับประกัน" value={row.item.coverageNote || '-'} className="md:col-span-2" />
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="text-sm text-gray-500 mb-1">หมายเหตุของฉัน</div>
+                      <div className="rounded-lg border border-gray-200 p-3 bg-gray-50 text-sm text-gray-800 min-h-[44px]">
+                        {row.item.customerNote?.trim() ? row.item.customerNote : '-'}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={() => setNoteModal({ open: true, itemId: row.item.id, name: row.item.productName, note: row.item.customerNote || '' })}
+                        className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+                      >
+                        📝 เพิ่มหมายเหตุ
+                      </button>
+
+                      <a
+                        href={`${api.defaults.baseURL.replace(/\/$/, '')}/customer/warranties/${row.warrantyId}/pdf`}
+                        target="_blank" rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+                      >
+                        ⬇️ ดาวน์โหลด PDF
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="w-full md:w-56">
+                    <div className="aspect-video bg-gray-100 rounded-lg border border-gray-200 overflow-hidden flex items-center justify-center text-gray-400 text-sm">
+                      {img ? <img className="w-full h-full object-cover" src={img} alt="ภาพสินค้า" /> : <span>ไม่มีรูปภาพ</span>}
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {noteModal.open && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold">เพิ่มหมายเหตุ - {noteModal.name}</h4>
+              <button onClick={() => setNoteModal({ open: false, itemId: null, name: '', note: '' })}>✕</button>
+            </div>
+            <textarea
+              rows={5}
+              value={noteModal.note}
+              onChange={e => setNoteModal({ ...noteModal, note: e.target.value })}
+              className="w-full rounded-xl border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="พิมพ์หมายเหตุของคุณ"
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setNoteModal({ open: false, itemId: null, name: '', note: '' })} className="px-4 py-2 rounded-lg border">
+                ยกเลิก
+              </button>
+              <button onClick={onSaveNote} className="px-4 py-2 rounded-lg bg-blue-600 text-white">
+                บันทึก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default function CustomerWarranty() {
-  const [summary, setSummary] = useState({ all: 0, active: 0, near: 0, expired: 0 });
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [warranties, setWarranties] = useState([]);
-
-  const [noteItem, setNoteItem] = useState(null);        // {itemId, defaultValue}
-  const [reloading, setReloading] = useState(false);
-
-  const fetchAll = async () => {
-    setLoading(true);
-    const [sumRes, listRes] = await Promise.all([
-      api("/customers/me/summary"),
-      api(`/customers/me/warranties?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}`),
-    ]);
-    const sumJson = await sumRes.json();
-    const listJson = await listRes.json();
-    setSummary(sumJson?.data?.totals || { all:0, active:0, near:0, expired:0 });
-    setWarranties(listJson?.data?.warranties || []);
-    setLoading(false);
-  };
-
-  useEffect(()=>{ fetchAll(); /* eslint-disable-next-line */ },[]);
-  useEffect(()=>{ const t = setTimeout(fetchAll, 300); return ()=>clearTimeout(t); }, [query, status]);
-
-  const cards = useMemo(()=>warranties, [warranties]);
-
-  const handleSaveNote = async (text) => {
-    if (!noteItem) return;
-    setReloading(true);
-    await api(`/customers/me/items/${noteItem.itemId}/note`, { method: "POST", body: JSON.stringify({ note: text }) });
-    setNoteItem(null);
-    await fetchAll();
-    setReloading(false);
-  };
-
+function SummaryCard({ label, value, tone }) {
+  const toneMap = { green: 'bg-green-50', amber: 'bg-amber-50', red: 'bg-red-50', default: 'bg-gray-50' };
   return (
-    <div className="min-h-screen bg-[#e9f3fb]">
-      <div className="max-w-5xl mx-auto pt-8 pb-16">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-xl bg-blue-600" />
-          <div className="text-2xl font-bold">Warranty</div>
-        </div>
+    <div className={`rounded-xl p-4 ${toneMap[tone] || toneMap.default} border border-gray-200`}>
+      <div className="text-2xl font-bold">{value}</div>
+      <div className="text-gray-600 text-sm">{label}</div>
+    </div>
+  );
+}
 
-        {/* Summary */}
-        <div className="grid grid-cols-4 gap-3 mb-4">
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <div className="text-3xl font-bold text-center">{summary.all}</div>
-            <div className="text-center text-gray-600">ในรับประกันทั้งหมด</div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <div className="text-3xl font-bold text-center">{summary.active}</div>
-            <div className="text-center text-gray-600">ใช้งานได้</div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <div className="text-3xl font-bold text-center">{summary.near}</div>
-            <div className="text-center text-gray-600">ใกล้หมดอายุ</div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <div className="text-3xl font-bold text-center">{summary.expired}</div>
-            <div className="text-center text-gray-600">หมดอายุ</div>
-          </div>
-        </div>
-
-        {/* Search & Filter */}
-        <div className="bg-white rounded-xl p-3 shadow-sm mb-4 flex items-center gap-3">
-          <input className="flex-1 border rounded-md px-3 py-2" placeholder="ค้นหาได้ด้วยชื่อสินค้า ร้านค้า รหัสรับประกัน หรือ Serial" value={query} onChange={e=>setQuery(e.target.value)} />
-          <div className="flex gap-2">
-            <button className={`px-3 py-1 rounded-lg border ${status===""?"bg-gray-900 text-white":""}`} onClick={()=>setStatus("")}>ทั้งหมด</button>
-            <button className={`px-3 py-1 rounded-lg border ${status==="active"?"bg-emerald-600 text-white":""}`} onClick={()=>setStatus("active")}>ใช้งานได้</button>
-            <button className={`px-3 py-1 rounded-lg border ${status==="nearing_expiration"?"bg-amber-600 text-white":""}`} onClick={()=>setStatus("nearing_expiration")}>ใกล้หมดอายุ</button>
-            <button className={`px-3 py-1 rounded-lg border ${status==="expired"?"bg-rose-600 text-white":""}`} onClick={()=>setStatus("expired")}>หมดอายุ</button>
-          </div>
-        </div>
-
-        {/* List */}
-        {loading ? (
-          <div className="text-center text-gray-500 py-10">กำลังโหลด...</div>
-        ) : cards.length===0 ? (
-          <div className="text-center text-gray-500 py-10">ไม่พบใบรับประกัน</div>
-        ) : (
-          <div className="space-y-4">
-            {cards.map(h => (
-              <div key={h.id} className="bg-white rounded-2xl shadow-sm p-4">
-                {h.items.map((it, idx)=>(
-                  <div key={it.id} className="flex gap-4 items-start border-b last:border-0 py-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="text-lg font-semibold">{it.productName}</div>
-                        <StatusPill code={it.status.code}/>
-                      </div>
-                      <div className="grid grid-cols-3 gap-3 text-sm mt-1">
-                        <div>
-                          <div className="text-gray-500">รหัสรับประกัน</div>
-                          <div className="font-medium">{h.code}</div>
-                          <div className="text-gray-500 mt-1">Serial No.</div>
-                          <div className="font-medium">{it.serial || "-"}</div>
-                          <div className="text-gray-500 mt-1">วันที่ซื้อ</div>
-                          <div>{it.purchaseDate ? new Date(it.purchaseDate).toLocaleDateString() : "-"}</div>
-                        </div>
-                        <div>
-                          <div className="text-gray-500">ร้านค้า</div>
-                          <div className="font-medium">{h.storeName}</div>
-                          <div className="text-gray-500 mt-1">วันหมดอายุ</div>
-                          <div>{it.expiryDate ? new Date(it.expiryDate).toLocaleDateString() : "-"}</div>
-                          <div className="text-gray-500 mt-1">เวลาที่เหลือ</div>
-                          <div>{it.remainingDays==null? "-" : (it.remainingDays<0? "หมดอายุ": `${it.remainingDays} วัน`)}</div>
-                        </div>
-                        <div>
-                          <div className="text-gray-500">เบอร์ร้าน</div>
-                          <div className="font-medium">{h.storePhone || "-"}</div>
-                        </div>
-                      </div>
-
-                      <div className="text-sm text-gray-600 mt-2">
-                        <div className="font-medium">เงื่อนไขบริการรับประกัน</div>
-                        <div>{it.noteFromStore || "-"}</div>
-                      </div>
-                      <div className="text-sm text-gray-600 mt-2">
-                        <div className="font-medium">หมายเหตุของฉัน</div>
-                        <div className="whitespace-pre-wrap">{it.customerNote || "-"}</div>
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        <button className="px-3 py-2 rounded-lg border flex items-center gap-2" onClick={()=>setNoteItem({ itemId: it.id, defaultValue: it.customerNote || "" })}>
-                          <span>✎</span> เพิ่มหมายเหตุ
-                        </button>
-                        <a className="px-3 py-2 rounded-lg border flex items-center gap-2" href="#" onClick={(e)=>e.preventDefault()}>
-                          ⬇️ ดาวน์โหลด PDF
-                        </a>
-                      </div>
-                    </div>
-                    <div className="w-48 h-32 bg-gray-200 rounded-xl shrink-0 overflow-hidden flex items-center justify-center">
-                      {/* ภาพสินค้า/ใบเสร็จภายหลัง */}
-                      <span className="text-gray-500 text-sm">ไม่มีรูปภาพ</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <NoteModal
-          open={!!noteItem}
-          defaultValue={noteItem?.defaultValue}
-          onClose={()=>setNoteItem(null)}
-          onSave={handleSaveNote}
-        />
-        {reloading && <div className="fixed bottom-4 right-4 bg-black text-white text-sm px-3 py-2 rounded-lg">กำลังบันทึก...</div>}
-      </div>
+function Field({ label, value, className = '' }) {
+  return (
+    <div className={`flex flex-col ${className}`}>
+      <span className="text-gray-400 text-xs">{label}</span>
+      <span className="text-gray-800">{value ?? '-'}</span>
     </div>
   );
 }

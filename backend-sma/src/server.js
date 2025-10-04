@@ -10,8 +10,10 @@ import multer from 'multer';
 import authRoutes from './routes/auth.routes.js';
 import storeRoutes from './routes/store.routes.js';
 import warrantyRoutes from './routes/warranty.routes.js';
-// route สำหรับรูปของ WarrantyItem
 import warrantyItemRoutes from './routes/warrantyItem.routes.js';
+
+// ✅ เพิ่ม: เส้นทางฝั่งลูกค้า
+import customerRoutes from './routes/customer.routes.js';
 
 // Swagger
 import swaggerUi from 'swagger-ui-express';
@@ -42,18 +44,21 @@ app.use(cookieParser());
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // เสิร์ฟไฟล์อัปโหลดกลับให้หน้าเว็บ (ฐานเดียวกับ uploadImages.js)
-//app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// ถ้าโฟลเดอร์อัปโหลดอยู่ที่ src/uploads ให้ใช้บรรทัดนี้
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// ถ้าอยู่ที่ root (../uploads) ให้สลับมาใช้บรรทัดด้านล่างแทน
+// app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 app.get('/', (_req, res) => res.send('SME Email Auth API - Running OK'));
 
 // routes (คง prefix เดิมไว้ทั้งหมด)
 app.use('/auth', authRoutes);
 app.use('/store', storeRoutes);
 app.use('/warranties', warrantyRoutes);
-
-// ผูกเส้นทางใหม่ของรูปภาพรายการสินค้า
-// (แก้ 404 ตอนอัปเดต/อัปโหลด/ลบรูป ของ warranty item)
 app.use('/warranty-items', warrantyItemRoutes);
+
+// ✅ เพิ่ม: ผูกเส้นทางฝั่งลูกค้า (ดู/ค้นหาใบรับประกันของตัวเอง, เพิ่มหมายเหตุ, ดาวน์โหลด PDF)
+app.use('/customer', customerRoutes);
 
 // Multer & Validation errors → ตอบ 400 แทน 500
 app.use((err, _req, res, next) => {

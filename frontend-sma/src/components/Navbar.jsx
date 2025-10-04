@@ -23,16 +23,24 @@ export default function Navbar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
-  // === เพิ่มความสามารถด้าน auth (ถ้าไม่มีจะ fallback เป็นว่าง) ===
   const { user, logout } = useAuth() || {};
   const isAuthenticated = !!user;
+  const role = (user?.role || '').toUpperCase();
+
+  // ปลายทางแดชบอร์ดแยกตาม role
+  const dashHref =
+    role === 'STORE'
+      ? '/dashboard/warranty'
+      : role === 'CUSTOMER'
+      ? '/customer/warranties'
+      : '/signin?next=/customer/warranties';
+
   const displayName =
     user?.store?.name || user?.storeName || user?.name || user?.email || 'บัญชีของฉัน';
 
   const onSignin = pathname !== "/signin";
   const onSignup = pathname !== "/signup";
 
-  // === เพิ่ม handleLogout แบบ async และ redirect ===
   const handleLogout = async () => {
     try {
       await logout?.();
@@ -49,7 +57,7 @@ export default function Navbar() {
           <span className="text-xl font-semibold text-gray-900">Warranty</span>
         </Link>
 
-        {/* === เพิ่มเมนูกลางแบบ NavLink (ไม่กระทบของเดิม) === */}
+        {/* เมนูกลาง */}
         <div className="hidden md:flex items-center gap-6">
           <NavLink
             end
@@ -62,9 +70,10 @@ export default function Navbar() {
           </NavLink>
           <a href="#features" className="text-sm text-gray-600 hover:text-gray-900">การรับประกัน</a>
           <a href="#why" className="text-sm text-gray-600 hover:text-gray-900">เกี่ยวกับเรา</a>
+
           {isAuthenticated && (
             <NavLink
-              to="/dashboard/warranty"
+              to={dashHref} // ← เปลี่ยนเป็นปลายทางตาม role
               className={({ isActive }) =>
                 `text-sm ${isActive ? 'text-[color:var(--brand)]' : 'text-gray-600 hover:text-gray-900'}`
               }
@@ -74,11 +83,11 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* === คงปุ่มเดิมไว้ และเพิ่มสาขาเมื่อ login แล้ว === */}
+        {/* ปุ่มขวา */}
         {isAuthenticated ? (
           <div className="flex items-center gap-4">
             <Link
-              to="/dashboard/warranty"
+              to={dashHref} // ← เปลี่ยนปลายทางตาม role
               className="hidden md:inline text-sm font-medium text-[color:var(--brand)] hover:text-[color:var(--brand-600)]"
             >
               ไปที่แดชบอร์ด

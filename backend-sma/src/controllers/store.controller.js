@@ -1,4 +1,3 @@
-// backend-sma/src/controllers/store.controller.js
 import bcrypt from "bcryptjs";
 import { prisma } from "../db/prisma.js";
 import { sendError, sendSuccess } from "../utils/http.js";
@@ -82,7 +81,7 @@ async function nextWarrantyCodeForStore(tx, storeId, { prefix = "WR", width = 3 
     const m = last.code.match(/\d+$/);
     if (m) lastNum = Number(m[0]);
   }
-  return `${prefix}${pad3(lastNum + 1)}`;
+  return `${prefix}${pad3(lastNum + 1)}`; // width ไม่ได้ใช้ padding แบบยืด เลยยึด 3 ตาม pad3()
 }
 
 // กันชนกรณีชนพร้อมกัน (retry ถ้าโดน P2002) – ใช้ composite unique [storeId, code]
@@ -323,6 +322,7 @@ export async function changeStorePassword(req, res) {
  * ปรับเพิ่ม:
  *  - WR: ออกเลขแบบ "แยกร้าน" (per store) ด้วย composite unique [storeId, code]
  *  - SN: auto-generate เป็น SN001, SN002, ... และ "ยูนีคภายในใบเดียวกัน"
+ *  - ★ เชื่อมอีเมลลูกค้า → customerUserId (ถ้าพบบัญชี role = CUSTOMER)
  */
 export async function createWarranty(req, res) {
   const storeId = parseStoreId(req, res);
@@ -341,6 +341,20 @@ export async function createWarranty(req, res) {
       // --- payload หลายรายการในใบเดียว ---
       if (Array.isArray(body.items) && body.items.length > 0) {
         const first = body.items[0];
+
+        // ★ ลองหาบัญชีลูกค้าจากอีเมล (ถ้าส่งมา)
+        const rawEmail = first?.customer_email ?? null;
+        let customerUser = null;
+        if (rawEmail) {
+          customerUser = await tx.user.findUnique({
+            where: { email: rawEmail },
+            select: { id: true, role: true },
+          });
+          if (customerUser && customerUser.role !== "CUSTOMER") {
+            // หยุดทันทีถ้าอีเมลไม่ใช่บัญชีลูกค้าจริง
+            throw Object.assign(new Error("อีเมลนี้ไม่ใช่บัญชี CUSTOMER"), { status: 400 });
+          }
+        }
 
         // ★ กัน serial ซ้ำในคำขอ + auto SNxxx
         const usedSerial = new Set();
@@ -392,9 +406,11 @@ export async function createWarranty(req, res) {
               data: {
                 storeId,
                 code,
-                customerEmail: first?.customer_email ?? null,
-                customerName: null,
-                customerPhone: null,
+                customerEmail: rawEmail ?? null,
+                customerName: first?.customer_name ?? null,
+                customerPhone: first?.customer_phone ?? null,
+                // ★ ใส่ FK ถ้าพบบัญชีลูกค้า
+                customerUserId: customerUser ? customerUser.id : null,
                 items: { create: itemsToCreate },
               },
               include: { items: true },
@@ -427,13 +443,30 @@ export async function createWarranty(req, res) {
       // ★ SN อัตโนมัติถ้าไม่ส่งมา → SN001
       const serialOne = (String(body.serial || "").trim() || `SN${pad3(1)}`);
 
+      // ★ ลองหาบัญชีลูกค้าจากอีเมล (ถ้าส่งมา)
+      const rawEmail = body.customer_email ?? null;
+      let customerUser = null;
+      if (rawEmail) {
+        customerUser = await tx.user.findUnique({
+          where: { email: rawEmail },
+          select: { id: true, role: true },
+        });
+        if (customerUser && customerUser.role !== "CUSTOMER") {
+          throw Object.assign(new Error("อีเมลนี้ไม่ใช่บัญชี CUSTOMER"), { status: 400 });
+        }
+      }
+
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           return await tx.warranty.create({
             data: {
               storeId,
               code,
-              customerEmail: body.customer_email ?? null,
+              customerEmail: rawEmail ?? null,
+              customerName: body.customer_name ?? null,
+              customerPhone: body.customer_phone ?? null,
+              // ★ ใส่ FK ถ้าพบบัญชีลูกค้า
+              customerUserId: customerUser ? customerUser.id : null,
               items: {
                 create: [
                   {
