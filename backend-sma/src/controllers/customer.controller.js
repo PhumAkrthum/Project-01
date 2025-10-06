@@ -1,29 +1,157 @@
-// src/controllers/customer.controller.js
-import { prisma } from '../db/prisma.js';
-import * as warrantyCtrl from './warranty.controller.js';
+// backend-sma/src/controllers/customer.controller.js
+import bcrypt from 'bcryptjs'
+import { prisma } from '../db/prisma.js'
+import * as warrantyCtrl from './warranty.controller.js'
+
+/* =========================
+ * Utilities
+ * ========================= */
 
 // ใช้ JS ล้วน ๆ ไม่พึ่ง date-fns
 function statusFromDate(expiryDate, notifyDays = 30) {
-  if (!expiryDate) return { status: 'active', daysLeft: null };
-  const ONE_DAY = 24 * 60 * 60 * 1000;
-  const daysLeft = Math.floor((new Date(expiryDate) - Date.now()) / ONE_DAY);
-  if (daysLeft < 0) return { status: 'expired', daysLeft };
-  if (daysLeft <= notifyDays) return { status: 'nearing_expiration', daysLeft };
-  return { status: 'active', daysLeft };
+  if (!expiryDate) return { status: 'active', daysLeft: null }
+  const ONE_DAY = 24 * 60 * 60 * 1000
+  const daysLeft = Math.floor((new Date(expiryDate) - Date.now()) / ONE_DAY)
+  if (daysLeft < 0) return { status: 'expired', daysLeft }
+  if (daysLeft <= notifyDays) return { status: 'nearing_expiration', daysLeft }
+  return { status: 'active', daysLeft }
 }
+
+function bool(v, fallback = false) {
+  if (typeof v === 'boolean') return v
+  if (typeof v === 'string') {
+    if (/^(true|1|yes|on)$/i.test(v)) return true
+    if (/^(false|0|no|off)$/i.test(v)) return false
+  }
+  return fallback
+}
+
+function trimOrNull(s) {
+  if (typeof s !== 'string') return null
+  const t = s.trim()
+  return t ? t : null
+}
+
+/* =========================
+ * Profile APIs (NEW)
+ * ========================= */
+
+// GET /customer/profile
+export async function getMyProfile(req, res, next) {
+  try {
+    const me = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { customerProfile: true },
+    })
+    if (!me || me.role !== 'CUSTOMER') {
+      return res.status(404).json({ message: 'ไม่พบบัญชีลูกค้า' })
+    }
+
+    const p = me.customerProfile
+    return res.json({
+      email: me.email,
+      firstName: p?.firstName ?? '',
+      lastName: p?.lastName ?? '',
+      phone: p?.phone ?? '',
+      isConsent: !!p?.isConsent,
+    })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// PATCH /customer/profile
+export async function updateMyProfile(req, res, next) {
+  try {
+    const body = req.body ?? {}
+
+    const [me, exist] = await Promise.all([
+      prisma.user.findUnique({ where: { id: req.user.id } }),
+      prisma.customerProfile.findUnique({ where: { userId: req.user.id } }),
+    ])
+
+    if (!me || me.role !== 'CUSTOMER') {
+      return res.status(404).json({ message: 'ไม่พบบัญชีลูกค้า' })
+    }
+
+    const data = {
+      firstName: trimOrNull(body.firstName) ?? (exist?.firstName ?? ''),
+      lastName: trimOrNull(body.lastName) ?? (exist?.lastName ?? ''),
+      phone: trimOrNull(body.phone) ?? (exist?.phone ?? ''),
+      isConsent: bool(body.isConsent, exist?.isConsent ?? false),
+    }
+
+    const saved = await prisma.customerProfile.upsert({
+      where: { userId: req.user.id },
+      update: data,
+      create: { userId: req.user.id, ...data },
+    })
+
+    return res.json({
+      message: 'บันทึกโปรไฟล์เรียบร้อย',
+      profile: {
+        email: me.email,
+        firstName: saved.firstName,
+        lastName: saved.lastName,
+        phone: saved.phone,
+        isConsent: saved.isConsent,
+      },
+    })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// PATCH /customer/change-password
+export async function changeMyPassword(req, res, next) {
+  try {
+    const { old_password = '', new_password = '' } = req.body ?? {}
+
+    const me = await prisma.user.findUnique({ where: { id: req.user.id } })
+    if (!me || me.role !== 'CUSTOMER') {
+      return res.status(404).json({ message: 'ไม่พบบัญชีลูกค้า' })
+    }
+
+    // ตรวจของเก่า
+    const valid = await bcrypt.compare(String(old_password), me.passwordHash)
+    if (!valid) {
+      return res.status(400).json({ message: 'รหัสผ่านเดิมไม่ถูกต้อง' })
+    }
+
+    // ตรวจของใหม่
+    if (typeof new_password !== 'string' || new_password.length < 8) {
+      return res.status(400).json({ message: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร' })
+    }
+    const same = await bcrypt.compare(String(new_password), me.passwordHash)
+    if (same) {
+      return res.status(400).json({ message: 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม' })
+    }
+
+    const hash = await bcrypt.hash(String(new_password), 12)
+    await prisma.user.update({
+      where: { id: me.id },
+      data: { passwordHash: hash },
+    })
+
+    return res.json({ message: 'เปลี่ยนรหัสผ่านเรียบร้อย' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+/* =========================
+ * Warranties (EXISTING)
+ * ========================= */
 
 // GET /customer/warranties
 export async function getMyWarranties(req, res, next) {
   try {
-    const q = (req.query.q || '').trim();
-    const status = (req.query.status || 'all');
+    const q = (req.query.q || '').trim()
+    const status = req.query.status || 'all'
 
     const customerCond = {
-      OR: [
-        { customerUserId: req.user.id },
-        { customerEmail: req.user.email },
-      ],
-    };
+      OR: [{ customerUserId: req.user.id }, { customerEmail: req.user.email }],
+    }
 
     const where = q
       ? {
@@ -38,7 +166,7 @@ export async function getMyWarranties(req, res, next) {
             },
           ],
         }
-      : customerCond;
+      : customerCond
 
     const list = await prisma.warranty.findMany({
       where,
@@ -47,81 +175,81 @@ export async function getMyWarranties(req, res, next) {
         items: true, // images เป็น Json ใน item อยู่แล้ว
       },
       orderBy: { createdAt: 'desc' },
-    });
+    })
 
     // enrich per item + filter by status
-    const totalsCounter = { all: 0, active: 0, nearing_expiration: 0, expired: 0 };
+    const totalsCounter = { all: 0, active: 0, nearing_expiration: 0, expired: 0 }
     const filtered = list
       .map((w) => {
-        const notifyDays = w.store?.storeProfile?.notifyDaysInAdvance ?? 30;
+        const notifyDays = w.store?.storeProfile?.notifyDaysInAdvance ?? 30
         const items = (w.items || []).map((it) => {
-          const s = statusFromDate(it.expiryDate, notifyDays);
-          totalsCounter.all += 1;
-          totalsCounter[s.status] += 1;
-          return { ...it, _status: s.status, _daysLeft: s.daysLeft };
-        });
+          const s = statusFromDate(it.expiryDate, notifyDays)
+          totalsCounter.all += 1
+          totalsCounter[s.status] += 1
+          return { ...it, _status: s.status, _daysLeft: s.daysLeft }
+        })
 
-        const itemsAfterFilter = status === 'all' ? items : items.filter((i) => i._status === status);
-        return { ...w, items: itemsAfterFilter };
+        const itemsAfterFilter = status === 'all' ? items : items.filter((i) => i._status === status)
+        return { ...w, items: itemsAfterFilter }
       })
-      .filter((w) => w.items.length > 0 || status === 'all');
+      .filter((w) => w.items.length > 0 || status === 'all')
 
     res.json({
       totals: totalsCounter,
       data: filtered,
-    });
+    })
   } catch (err) {
-    next(err);
+    next(err)
   }
 }
 
 // PATCH /customer/warranty-items/:itemId/note
 export async function updateMyNote(req, res, next) {
   try {
-    const { itemId } = req.params; // cuid string
-    const { note = '' } = req.body;
+    const { itemId } = req.params // cuid string
+    const { note = '' } = req.body
 
     const item = await prisma.warrantyItem.findUnique({
       where: { id: itemId },
       include: { warranty: true },
-    });
-    if (!item) return res.status(404).json({ message: 'Item not found' });
+    })
+    if (!item) return res.status(404).json({ message: 'Item not found' })
 
     const isOwner =
       item.warranty.customerUserId === req.user.id ||
-      (item.warranty.customerEmail && item.warranty.customerEmail === req.user.email);
+      (item.warranty.customerEmail && item.warranty.customerEmail === req.user.email)
 
-    if (!isOwner) return res.status(403).json({ message: 'Forbidden' });
+    if (!isOwner) return res.status(403).json({ message: 'Forbidden' })
 
     const updated = await prisma.warrantyItem.update({
       where: { id: itemId },
-      data: { customerNote: note },
-    });
+      data: { customerNote: String(note) },
+    })
 
-    res.json({ message: 'Saved', item: updated });
+    res.json({ message: 'Saved', item: updated })
   } catch (err) {
-    next(err);
+    next(err)
   }
 }
 
 // GET /customer/warranties/:warrantyId/pdf
 export async function getMyWarrantyPdf(req, res, next) {
   try {
-    const { warrantyId } = req.params;
+    const { warrantyId } = req.params
 
-    const w = await prisma.warranty.findUnique({ where: { id: warrantyId } });
-    if (!w) return res.status(404).json({ message: 'Not found' });
+    const w = await prisma.warranty.findUnique({ where: { id: warrantyId } })
+    if (!w) return res.status(404).json({ message: 'Not found' })
 
     const isOwner =
       w.customerUserId === req.user.id ||
-      (w.customerEmail && w.customerEmail === req.user.email);
+      (w.customerEmail && w.customerEmail === req.user.email)
 
-    if (!isOwner) return res.status(403).json({ message: 'Forbidden' });
+    if (!isOwner) return res.status(403).json({ message: 'Forbidden' })
 
-    // เรียกตัวสร้าง PDF เดิม (ปรับชื่อเมธอดให้ตรงโปรเจกต์จริง)
-    req.params.warrantyId = warrantyId;
-    return warrantyCtrl.getPdf(req, res, next);
+    // เรียกตัวสร้าง PDF เดิม (ชื่อฟังก์ชันใน controller ใบรับประกัน)
+    req.params.warrantyId = warrantyId
+    return warrantyCtrl.getPdf(req, res, next)
   } catch (err) {
-    next(err);
+    next(err)
   }
 }

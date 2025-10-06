@@ -1,3 +1,4 @@
+// src/main.jsx
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import {
@@ -16,7 +17,10 @@ import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
 import VerifyEmail from './pages/VerifyEmail'
 import WarrantyDashboard from './pages/WarrantyDashboard'
-import CustomerWarranty from './pages/CustomerWarranty.jsx' // ★ เพิ่ม
+import CustomerWarranty from './pages/CustomerWarranty.jsx'
+
+// ⬇️ เพิ่ม: แถบของฝั่งลูกค้า
+import CustomerNavbar from './components/CustomerNavbar.jsx'
 
 /** ===== Helpers / Guards ===== */
 function decodeJwt(token) {
@@ -42,7 +46,6 @@ function ProtectedStoreRoute({ children }) {
   return children
 }
 
-// ★ ใหม่: guard สำหรับลูกค้า
 function ProtectedCustomerRoute({ children }) {
   const location = useLocation()
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -52,7 +55,6 @@ function ProtectedCustomerRoute({ children }) {
     return <Navigate to="/signin" replace state={{ from: location }} />
   }
   if (role !== 'CUSTOMER') {
-    // ถ้าเป็นร้านอยู่แล้วให้ไปแดชบอร์ดร้าน
     if (role === 'STORE') return <Navigate to="/dashboard/warranty" replace />
     return <Navigate to="/" replace />
   }
@@ -60,7 +62,8 @@ function ProtectedCustomerRoute({ children }) {
 }
 
 /** ===== Layouts ===== */
-function Layout() {
+// Layout สาธารณะ (โฮม/สมัคร/ล็อกอิน/แดชบอร์ดร้าน)
+function PublicLayout() {
   const location = useLocation()
   const isDashboard = location.pathname.startsWith('/dashboard')
   return (
@@ -72,17 +75,28 @@ function Layout() {
   )
 }
 
+// Layout เฉพาะฝั่งลูกค้า (ใช้ CustomerNavbar)
+function CustomerLayout() {
+  return (
+    <div className="min-h-screen bg-white text-gray-900">
+      <CustomerNavbar />
+      <main><Outlet /></main>
+      <Footer />
+    </div>
+  )
+}
+
 /** ===== Router ===== */
 const router = createBrowserRouter([
+  // กลุ่ม public + แดชบอร์ดฝั่งร้าน
   {
-    element: <Layout />,
+    element: <PublicLayout />,
     children: [
       { path: '/', element: <Home /> },
       { path: '/signin', element: <SignIn /> },
       { path: '/signup', element: <SignUp /> },
       { path: '/verify-email', element: <VerifyEmail /> },
 
-      // Dashboard ร้าน (STORE)
       {
         path: '/dashboard/warranty',
         element: (
@@ -91,10 +105,17 @@ const router = createBrowserRouter([
           </ProtectedStoreRoute>
         ),
       },
+    ],
+  },
 
-      // ★ หน้า "ใบรับประกันของฉัน" สำหรับลูกค้า (CUSTOMER)
+  // กลุ่มฝั่งลูกค้า — ใช้ CustomerLayout
+  {
+    path: '/customer',
+    element: <CustomerLayout />,
+    children: [
+      { index: true, element: <Navigate to="warranties" replace /> },
       {
-        path: '/customer/warranties',
+        path: 'warranties',
         element: (
           <ProtectedCustomerRoute>
             <CustomerWarranty />
