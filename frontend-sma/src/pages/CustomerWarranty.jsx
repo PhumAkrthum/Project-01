@@ -92,7 +92,7 @@ export default function CustomerWarranty() {
       setData(rows);
       setPage(1); // รีเซ็ตหน้าเมื่อมีการค้น/เปลี่ยนตัวกรอง
 
-      // รีเซ็ต expanded เฉพาะใบที่ไม่มีในเพจใหม่แล้ว เพื่อลด state ค้าง
+      // รีเซ็ต expanded เฉพาะใบที่ยังอยู่ เพื่อลด state ค้าง
       setExpandedByHeader((prev) => {
         const next = {};
         for (const w of rows) if (prev[w.id]) next[w.id] = true;
@@ -133,9 +133,32 @@ export default function CustomerWarranty() {
     fetchData();
   }
 
-  function onDownloadPdf(warrantyId) {
-    const href = `${(api.defaults.baseURL || "").replace(/\/$/, "")}/customer/warranties/${warrantyId}/pdf`;
-    window.open(href, "_blank", "noopener,noreferrer");
+  // ✅ FIX: ใช้ axios โหลดเป็น blob (มี Authorization header) แล้วค่อยเปิด
+  async function onDownloadPdf(warrantyId) {
+    try {
+      const resp = await api.get(`/customer/warranties/${warrantyId}/pdf`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([resp.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+
+      // เปิดแท็บใหม่ ถ้าถูกบล็อก (popup blocker) จะ fallback เป็นดาวน์โหลด
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+      if (!win) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `warranty-${warrantyId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
+      // เก็บ URL ไว้สักพักแล้วค่อย revoke
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      console.error("open pdf error", err);
+      alert("เปิดไฟล์ PDF ไม่ได้");
+    }
   }
 
   function usePageNumbers(total, current, windowSize = 5) {

@@ -1,5 +1,7 @@
-// src/controllers/warranty.controller.js
+// backend-sma/src/controllers/warranty.controller.js
 import PDFDocument from "pdfkit";
+import fs from "fs";
+import path from "path";
 import { prisma } from "../db/prisma.js";
 import { sendError, sendSuccess } from "../utils/http.js";
 
@@ -35,15 +37,17 @@ function statusForItem(item, notifyDays) {
 
 /**
  * สร้าง PDF ระดับ "ใบ" (Header) โดยพิมพ์ทุกรายการสินค้าในใบ
+ * ใช้ร่วมกันได้ทั้งร้าน (STORE) และลูกค้า (CUSTOMER)
  * GET /warranties/:warrantyId/pdf
+ * GET /customer/warranties/:warrantyId/pdf  (จะถูกเรียกมาที่ฟังก์ชันเดียวกัน)
  */
 export async function downloadWarrantyPdf(req, res) {
-  const storeId = currentStoreId(req);
-  if (storeId == null) {
-    return sendError(res, 401, "ต้องเข้าสู่ระบบร้านค้าก่อน");
-  }
-
   try {
+    const role = req.user?.role;
+    if (!role) {
+      return sendError(res, 401, "ต้องเข้าสู่ระบบก่อน");
+    }
+
     const warrantyId = String(req.params.warrantyId);
 
     const header = await prisma.warranty.findUnique({
@@ -54,25 +58,39 @@ export async function downloadWarrantyPdf(req, res) {
       },
     });
 
-    if (!header || header.storeId !== storeId) {
+    if (!header) {
       return sendError(res, 404, "ไม่พบใบรับประกัน");
     }
 
-    const profile = header.store.storeProfile;
+    // ตรวจสิทธิ์ตามบทบาท
+    if (role === "STORE") {
+      const storeId = currentStoreId(req);
+      if (storeId == null || header.storeId !== storeId) {
+        return sendError(res, 404, "ไม่พบใบรับประกัน");
+      }
+    } else if (role === "CUSTOMER") {
+      // ป้องกันกรณีเรียกตรง ๆ โดยไม่ผ่าน controller ลูกค้า
+      const isOwner =
+        header.customerUserId === req.user.id ||
+        (header.customerEmail && header.customerEmail === req.user.email);
+      if (!isOwner) {
+        return sendError(res, 403, "Forbidden");
+      }
+    } else {
+      return sendError(res, 403, "Forbidden");
+    }
+
+    const profile = header.store?.storeProfile;
     const notifyDays = profile?.notifyDaysInAdvance ?? DEFAULT_NOTIFY_DAYS;
 
-    // === headers เดิม ===
+    // === headers HTTP ===
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
       `inline; filename="warranty-${header.code || header.id}.pdf"`
     );
 
-    // =================== ส่วน "สร้าง PDF" ที่แก้ไข ===================
-    // โหลดโมดูลเฉพาะที่จำเป็นสำหรับ PDF
-    const fs = (await import("fs")).default;
-    const path = (await import("path")).default;
-
+    // =================== ส่วน "สร้าง PDF" ===================
     // helper
     const mm = (v) => v * 2.83464567;
     const T = (v, f = "-") =>
@@ -99,15 +117,13 @@ export async function downloadWarrantyPdf(req, res) {
       return null;
     }
 
-    // สร้างเอกสาร (ยังไม่ pipe จนกว่าจะโหลดฟอนต์สำเร็จ)
     const doc = new PDFDocument({ autoFirstPage: false });
 
-    // --- โหลดฟอนต์ไทยก่อน ---
+    // --- โหลดฟอนต์ไทย ---
     const regPath = firstExistingFile(fontCandidatesRegular);
     const boldPath = firstExistingFile(fontCandidatesBold);
 
     if (!regPath || !/\.ttf$/i.test(regPath)) {
-      // ปิดงานอย่างสุภาพ (กัน PDF เละ + กัน write-after-end)
       return sendError(
         res,
         500,
@@ -121,9 +137,8 @@ export async function downloadWarrantyPdf(req, res) {
       if (boldPath && /\.ttf$/i.test(boldPath)) {
         doc.registerFont("THAI_BOLD", fs.readFileSync(boldPath));
       }
-      doc.font("THAI"); // ตั้งค่าเริ่มต้นเป็นฟอนต์ไทย
+      doc.font("THAI"); // default
     } catch (e) {
-      // ถ้าไฟล์ไม่ใช่ TTF แบบ static (เช่น Variable/WOFF/WOFF2) จะมาตรงนี้
       console.error("Font load error:", e);
       return sendError(
         res,
@@ -132,25 +147,48 @@ export async function downloadWarrantyPdf(req, res) {
       );
     }
 
-    // --- โหลดฟอนต์สำเร็จแล้ว ค่อย pipe ออก ---
+    // เริ่มส่งสตรีม PDF ออกไป
     doc.pipe(res);
 
     // helpers วาดหัว + ช่อง
     function headerTitle(left, top, width) {
-      doc.font(boldPath ? "THAI_BOLD" : "THAI").fontSize(18).fillColor("#000")
+      doc
+        .font(boldPath ? "THAI_BOLD" : "THAI")
+        .fontSize(18)
+        .fillColor("#000")
         .text("ใบรับประกัน", left, top, { width: width / 2, align: "left" });
-      doc.font("THAI").fontSize(14)
-        .text("WARRANTY", left, top + mm(8), { width: width / 2, align: "left" });
-      doc.font("THAI").fontSize(12)
-        .text("สำหรับผู้ซื้อ", left + width / 2, top, { width: width / 2, align: "right" });
+
+      doc.font("THAI").fontSize(14).text("WARRANTY", left, top + mm(8), {
+        width: width / 2,
+        align: "left",
+      });
+
+      doc.font("THAI").fontSize(12).text("สำหรับผู้ซื้อ", left + width / 2, top, {
+        width: width / 2,
+        align: "right",
+      });
     }
 
     function cell(x, y, w, h, th, en, value, pad = mm(3.5)) {
       doc.rect(x, y, w, h).stroke();
-      doc.font("THAI").fontSize(10).fillColor("#000").text(th, x + pad, y + pad, { width: w - pad * 2 });
-      doc.font("THAI").fontSize(9).fillColor("#555").text(en, x + pad, y + pad + mm(5), { width: w - pad * 2 });
-      doc.font("THAI").fontSize(11).fillColor("#000")
-        .text(T(value), x + pad, y + pad + mm(11), { width: w - pad * 2, height: h - pad * 2 - mm(11) });
+      doc
+        .font("THAI")
+        .fontSize(10)
+        .fillColor("#000")
+        .text(th, x + pad, y + pad, { width: w - pad * 2 });
+      doc
+        .font("THAI")
+        .fontSize(9)
+        .fillColor("#555")
+        .text(en, x + pad, y + pad + mm(5), { width: w - pad * 2 });
+      doc
+        .font("THAI")
+        .fontSize(11)
+        .fillColor("#000")
+        .text(T(value), x + pad, y + pad + mm(11), {
+          width: w - pad * 2,
+          height: h - pad * 2 - mm(11),
+        });
     }
 
     function drawWarrantyPage(base, item) {
@@ -201,22 +239,42 @@ export async function downloadWarrantyPdf(req, res) {
       doc.rect(left, y, tableW, rowH4).stroke();
       doc.font("THAI").fontSize(10).fillColor("#000").text("ที่อยู่", left + mm(3.5), y + mm(3.5));
       doc.font("THAI").fontSize(9).fillColor("#555").text("Address", left + mm(3.5), y + mm(8.5));
-      doc.font("THAI").fontSize(11).fillColor("#000")
-        .text(T(base.customerAddress), left + mm(3.5), y + mm(14), { width: tableW - mm(7) });
+      doc
+        .font("THAI")
+        .fontSize(11)
+        .fillColor("#000")
+        .text(T(base.customerAddress), left + mm(3.5), y + mm(14), {
+          width: tableW - mm(7),
+        });
       y += rowH4;
 
       // แถว 5
       const purchaseDate = item.purchaseDate || base.purchaseDate;
-      const purchaseTxt = purchaseDate ? new Date(purchaseDate).toLocaleDateString("th-TH") : "-";
-      cell(left, y, colL, rowH5, "ชื่อจากบริษัทฯ/ตัวแทนจำหน่าย", "Dealer' Name", base.dealerName);
+      const purchaseTxt = purchaseDate
+        ? new Date(purchaseDate).toLocaleDateString("th-TH")
+        : "-";
+      cell(
+        left,
+        y,
+        colL,
+        rowH5,
+        "ชื่อจากบริษัทฯ/ตัวแทนจำหน่าย",
+        "Dealer' Name",
+        base.dealerName
+      );
       cell(left + colL, y, colR, rowH5, "วันที่ซื้อ", "Purchase Date", purchaseTxt);
       y += rowH5;
 
       // หมายเหตุบรรทัดล่าง
-      doc.font("THAI").fontSize(11).fillColor("#000")
+      doc
+        .font("THAI")
+        .fontSize(11)
+        .fillColor("#000")
         .text(
           T(base.footerNote, "โปรดนำใบรับประกันฉบับนี้มาแสดงเป็นหลักฐานทุกครั้งเมื่อใช้บริการ"),
-          left, y + mm(8), { width, align: "left" }
+          left,
+          y + mm(8),
+          { width, align: "left" }
         );
 
       // ข้อมูลบริษัท (ล่างซ้าย)
@@ -224,11 +282,15 @@ export async function downloadWarrantyPdf(req, res) {
         T(base.company?.name, ""),
         T(base.company?.address, ""),
         ["โทร.", T(base.company?.tel, ""), base.company?.fax ? `แฟกซ์ ${base.company.fax}` : ""]
-          .filter(Boolean).join(" "),
+          .filter(Boolean)
+          .join(" "),
       ].filter(Boolean);
 
       if (companyLines.length) {
-        doc.font("THAI").fontSize(10).fillColor("#000")
+        doc
+          .font("THAI")
+          .fontSize(10)
+          .fillColor("#000")
           .text(companyLines.join("\n"), left + mm(22), mm(297) - mm(44), {
             width: width - mm(22),
           });
@@ -269,7 +331,6 @@ export async function downloadWarrantyPdf(req, res) {
 
     doc.end();
     // =================== จบส่วนสร้าง PDF ===================
-
   } catch (error) {
     console.error("downloadWarrantyPdf error", error);
     return sendError(res, 500, "ไม่สามารถสร้างไฟล์ PDF ได้");

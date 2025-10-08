@@ -246,9 +246,9 @@ export async function getMyWarrantyPdf(req, res, next) {
 
     if (!isOwner) return res.status(403).json({ message: 'Forbidden' })
 
-    // เรียกตัวสร้าง PDF เดิม (ชื่อฟังก์ชันใน controller ใบรับประกัน)
+    // ส่งต่อให้ตัว renderer ที่มีอยู่จริง
     req.params.warrantyId = warrantyId
-    return warrantyCtrl.getPdf(req, res, next)
+    return warrantyCtrl.downloadWarrantyPdf(req, res, next)
   } catch (err) {
     next(err)
   }
