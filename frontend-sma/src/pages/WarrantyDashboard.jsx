@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../store/auth'
 import ImageUpload from '../components/ImageUpload'
 import ImagePreview from '../components/ImagePreview'
+import AppLogo from '../components/AppLogo' // ✅ ใช้โลโก้ที่คุณมีอยู่แล้ว
 
 const defaultFilters = [
   { value: 'all', label: 'ทั้งหมด' },
@@ -30,6 +31,9 @@ const STATUS_CODE_BY_LABEL = {
   'ใกล้หมดอายุ': 'nearing_expiration',
   'หมดอายุ': 'expired',
 }
+
+// ✅ กำหนดจำนวนใบ/หน้า = 5
+const PAGE_SIZE = 5
 
 function StatusBadge({ label, className }) {
   return (
@@ -226,7 +230,7 @@ export default function WarrantyDashboard() {
 
           const passSearch = term ? itemHay.some(s => s.includes(term)) : true
 
-          // <<< จุดแก้ >>> ให้แท็บอื่นๆ โชว์รายการในใบนั้นที่ผ่านสถานะ แม้คำค้นจะตรงแค่ตัวใบ
+          // ให้แท็บอื่นๆ โชว์รายการในใบนั้นที่ผ่านสถานะ แม้คำค้นจะตรงแค่ตัวใบ
           return passSearch || headerMatch
         })
 
@@ -234,6 +238,38 @@ export default function WarrantyDashboard() {
       })
       .filter(h => h._filteredItems.length > 0)
   }, [warranties, activeFilter, searchTerm, storeProfile.notifyDaysInAdvance])
+
+  // ✅ Pagination state + helper
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [searchTerm, activeFilter]) // รีเซ็ตเมื่อค้นหาหรือเปลี่ยนแท็บ
+
+  const { totalPages, currentPage, paginatedHeaders } = useMemo(() => {
+    const total = Math.max(1, Math.ceil((filteredHeaders?.length || 0) / PAGE_SIZE))
+    const safe = Math.min(Math.max(1, page), total)
+    const start = (safe - 1) * PAGE_SIZE
+    const end = start + PAGE_SIZE
+    return {
+      totalPages: total,
+      currentPage: safe,
+      paginatedHeaders: (filteredHeaders || []).slice(start, end),
+    }
+  }, [filteredHeaders, page])
+
+  useEffect(() => {
+    // ถ้าจำนวนหน้าลดลง ให้เลื่อนไปหน้าสุดท้ายที่ยังมีอยู่
+    setPage(p => (p !== currentPage ? currentPage : p))
+  }, [currentPage])
+
+  function pageNumbers(total, current, windowSize = 5) {
+    const half = Math.floor(windowSize / 2)
+    let start = Math.max(1, current - half)
+    let end = Math.min(total, start + windowSize - 1)
+    start = Math.max(1, Math.min(start, end - windowSize + 1))
+    const arr = []
+    for (let i = start; i <= end; i++) arr.push(i)
+    return arr
+  }
+  const pages = pageNumbers(totalPages, currentPage, 5)
 
   const openProfileModal = () => {
     setProfileModalOpen(true)
@@ -543,7 +579,9 @@ export default function WarrantyDashboard() {
       <header className="border-b border-sky-100 bg-white/90 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sky-500/90 text-2xl text-white shadow-lg">🛡️</div>
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sky-50 ring-1 ring-black/5">
+              <AppLogo className="h-7 w-7" />
+            </div>
             <div>
               <div className="text-lg font-semibold text-gray-900">Warranty</div>
               <div className="text-sm text-gray-500">จัดการการรับประกันของคุณได้ในที่เดียว</div>
@@ -688,14 +726,14 @@ export default function WarrantyDashboard() {
                 </div>
               </div>
 
-              {/* การ์ดสีส้ม: แสดงใบที่มีรายการผ่านเงื่อนไข */}
+              {/* รายการใบรับประกัน (แบ่งหน้า 5 ใบ/หน้า) */}
               <div className="mb-8 grid gap-4">
-                {filteredHeaders.length === 0 ? (
+                {paginatedHeaders.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500">
                     ยังไม่มีใบรับประกัน
                   </div>
                 ) : (
-                  filteredHeaders.map(header => {
+                  paginatedHeaders.map(header => {
                     const expanded = !!expandedByHeader[header.id]
                     return (
                       <div key={header.id} className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow">
@@ -825,6 +863,54 @@ export default function WarrantyDashboard() {
                   })
                 )}
               </div>
+
+              {/* ✅ Pagination footer */}
+              {filteredHeaders.length > 0 && (
+                <div className="mt-6 flex flex-col items-center gap-3 md:flex-row md:justify-between">
+                  <div className="text-xs text-gray-500">
+                    หน้า <span className="font-medium text-gray-900">{currentPage}</span> จาก{' '}
+                    <span className="font-medium text-gray-900">{totalPages}</span>
+                    {' • '}
+                    แสดง {Math.min((currentPage - 1) * PAGE_SIZE + 1, filteredHeaders.length)}–
+                    {Math.min(currentPage * PAGE_SIZE, filteredHeaders.length)} จาก {filteredHeaders.length} ใบ
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
+                        currentPage === 1
+                          ? 'cursor-not-allowed bg-white text-gray-300 ring-1 ring-black/10'
+                          : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
+                      }`}
+                    >
+                      ก่อนหน้า
+                    </button>
+                    {pages.map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setPage(n)}
+                        className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
+                          n === currentPage ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
+                        currentPage === totalPages
+                          ? 'cursor-not-allowed bg-white text-gray-300 ring-1 ring-black/10'
+                          : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
+                      }`}
+                    >
+                      ถัดไป
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
