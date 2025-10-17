@@ -1,192 +1,186 @@
 // src/pages/Home.jsx
 import { Link } from "react-router-dom";
-
-/* คลื่นพื้นหลัง */
-function HeroWaves() {
-  return (
-    <div className="absolute inset-0 -z-10 overflow-hidden">
-      <div className="absolute inset-0 bg-[#eaf3ff]" />
-      <svg
-        className="absolute -top-10 left-1/2 -translate-x-1/2 w-[160%] max-w-none rotate-180 opacity-90"
-        viewBox="0 0 1440 320"
-        aria-hidden="true"
-      >
-        <path
-          fill="#e5f0ff"
-          d="M0,64L48,69.3C96,75,192,85,288,117.3C384,149,480,203,576,229.3C672,256,768,256,864,240C960,224,1056,192,1152,165.3C1248,139,1344,117,1392,106.7L1440,96L1440,0L0,0Z"
-        />
-      </svg>
-      <svg
-        className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-[160%] max-w-none opacity-80"
-        viewBox="0 0 1440 320"
-        aria-hidden="true"
-      >
-        <path
-          fill="#dbeafe"
-          d="M0,224L48,197.3C96,171,192,117,288,96C384,75,480,85,576,112C672,139,768,181,864,176C960,171,1056,117,1152,96C1248,75,1344,85,1392,90.7L1440,96L1440,320L0,320Z"
-        />
-        <path
-          fill="#bfdbfe"
-          d="M0,256L60,234.7C120,213,240,171,360,154.7C480,139,600,149,720,154.7C840,160,960,160,1080,149.3C1200,139,1320,117,1380,106.7L1440,96L1440,320L0,320Z"
-          opacity="0.7"
-        />
-      </svg>
-    </div>
-  );
-}
-
-/* ไอคอนต่าง ๆ สำหรับสถิติ */
-function SmallIcon({ name, className = "w-5 h-5 text-blue-600" }) {
-  const common = { className, fill: "none", stroke: "currentColor", strokeWidth: 1.8 };
-  switch (name) {
-    case "users":
-      return (
-        <svg viewBox="0 0 24 24" {...common}>
-          <path d="M16 14a4 4 0 10-8 0" />
-          <circle cx="12" cy="7" r="3" />
-          <path d="M5 20a7 7 0 0114 0" />
-        </svg>
-      );
-    case "shop":
-      return (
-        <svg viewBox="0 0 24 24" {...common}>
-          <path d="M3 7h18l-2 12H5L3 7z" />
-          <path d="M16 7V4H8v3" />
-        </svg>
-      );
-    case "doc":
-      return (
-        <svg viewBox="0 0 24 24" {...common}>
-          <path d="M14 2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2V8z" />
-        </svg>
-      );
-    case "check":
-      return (
-        <svg viewBox="0 0 24 24" {...common}>
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      );
-    default:
-      return null;
-  }
-}
-
-/* กล่องสถิติ */
-function Stat({ icon, value, label }) {
-  return (
-    <div className="flex flex-col items-center">
-      <div className="w-12 h-12 rounded-full bg-white shadow border border-black/5 flex items-center justify-center">
-        {icon}
-      </div>
-      <div className="mt-2 text-xl font-semibold text-gray-900">{value}</div>
-      <div className="text-sm text-gray-500">{label}</div>
-    </div>
-  );
-}
+import "./Home.css";
 
 export default function Home() {
   return (
-    <div className="relative">
-      {/* ===== HERO (พื้นหลังฟ้าอ่อนทั้งบล็อก) ===== */}
-      <section className="relative overflow-hidden bg-[#eaf3ff]">
-        <HeroWaves />
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-14 pb-16 text-center">
-          <h1 className="text-3xl sm:text-5xl font-black text-gray-900">
+    <div className="bg-white text-gray-800 overflow-hidden">
+      {/* ===== HERO ===== */}
+      <section className="relative bg-[#eaf3ff] overflow-hidden pb-24">
+        {/* Animated wave background */}
+        <div className="absolute bottom-0 left-0 w-full overflow-hidden leading-none">
+          <svg
+            className="wave-motion"
+            viewBox="0 0 1440 320"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <path
+              fill="#dbeafe"
+              d="M0,160L48,154.7C96,149,192,139,288,133.3C384,128,480,128,576,144C672,160,768,192,864,208C960,224,1056,224,1152,202.7C1248,181,1344,139,1392,117.3L1440,96L1440,320L0,320Z"
+            />
+          </svg>
+        </div>
+
+        <div className="relative z-10 max-w-6xl mx-auto px-6 pt-24 text-center">
+          <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 leading-snug">
             แพลตฟอร์มบริหารจัดการ
-            <br className="hidden sm:block" />
+            <br />
             การรับประกัน
           </h1>
-          <p className="mt-3 text-gray-600">
-            สะดวกทั้งผู้ขายและผู้ซื้อ ช่วยให้จัดเก็บ ปรับปรุง และติดตามได้อย่างมีระบบ
+          <p className="mt-4 text-gray-700 font-medium text-base sm:text-lg">
+            ปลอดภัย ใช้งานง่าย เข้าถึงได้ทุกคน
           </p>
 
-          {/* สถิติ */}
-          <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-4xl mx-auto">
-            <Stat icon={<SmallIcon name="shop" />} value="500+" label="ร้านค้าที่ใช้งาน" />
-            <Stat icon={<SmallIcon name="users" />} value="4000+" label="ลูกค้าที่ลงทะเบียน" />
-            <Stat icon={<SmallIcon name="doc" />} value="10000+" label="ใบรับประกัน" />
-            <Stat icon={<SmallIcon name="check" />} value="99%" label="ความพึงพอใจ" />
-          </div>
-
-          {/* การ์ดสองฝั่ง */}
-          <div className="mt-10 grid sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
-            <div className="bg-white rounded-2xl shadow-xl border border-black/5 p-6 text-left">
-              <h3 className="text-lg font-semibold text-gray-900">ลูกค้า</h3>
-              <p className="mt-2 text-gray-600 text-sm">
-                เก็บเอกสารการรับประกันไว้ที่เดียว ค้นหาเร็ว แจ้งเตือนก่อนหมดอายุ
-              </p>
-              <Link
-                to="/signup?role=customer"
-                className="mt-4 inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium"
-              >
-                เริ่มต้นสำหรับผู้ซื้อสินค้า
-              </Link>
-            </div>
-            <div className="bg-white rounded-2xl shadow-xl border border-black/5 p-6 text-left">
-              <h3 className="text-lg font-semibold text-gray-900">ร้านค้า</h3>
-              <p className="mt-2 text-gray-600 text-sm">
-                ลงทะเบียนรับประกันให้ลูกค้า ออกเอกสารอัตโนมัติ วิเคราะห์สถิติการเคลม
-              </p>
-              <Link
-                to="/signup?role=store"
-                className="mt-4 inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium"
-              >
-                เริ่มต้นสำหรับร้านค้า
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ===== WHY CHOOSE (พื้นหลังขาว) ===== */}
-      <section className="bg-white">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-16">
-          <h2 className="text-center text-2xl sm:text-3xl font-extrabold text-gray-900 mb-8">
-            ทำไมต้องเลือก Warranty
-          </h2>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* ===== STATS ===== */}
+          <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-6 justify-items-center">
             {[
-              { title: "จัดเก็บประวัติสินค้า", desc: "เก็บเอกสารและหลักฐานการซื้อแบบดิจิทัล", icon: "doc" },
-              { title: "จัดการลูกค้า", desc: "ข้อมูลลูกค้าและประวัติการรับประกันครบถ้วน", icon: "users" },
-              { title: "รายงาน & สถิติ", desc: "ดูภาพรวมการขายและการเคลมอย่างง่ายดาย", icon: "check" },
-              { title: "แจ้งเตือนอัตโนมัติ", desc: "เตือนหมดอายุและสถานะเคลมแบบเรียลไทม์", icon: "shop" },
-            ].map((it) => (
-              <div key={it.title} className="bg-white rounded-2xl shadow-xl border border-black/5 p-6">
-                <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center">
-                  <SmallIcon name={it.icon} className="w-6 h-6 text-blue-700" />
+              { value: "500+", label: "ร้านค้าที่เชื่อถือ" },
+              { value: "4000+", label: "ลูกค้าที่พึงพอใจ" },
+              { value: "10000+", label: "ใบรับประกัน" },
+              { value: "99%", label: "ความพึงพอใจ" },
+            ].map((item, i) => (
+              <div key={i} className="flex flex-col items-center group">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-blue-100 rounded-full blur-lg opacity-50 group-hover:opacity-80 transition"></div>
+                  <div className="w-16 h-16 rounded-full border-2 border-blue-600 flex items-center justify-center text-blue-600 font-semibold text-lg bg-white shadow-lg shadow-blue-100 transition transform group-hover:scale-105">
+                    {item.value}
+                  </div>
                 </div>
-                <div className="mt-4 font-semibold text-gray-900">{it.title}</div>
-                <p className="mt-1 text-sm text-gray-600">{it.desc}</p>
+                <p className="text-gray-600 text-sm mt-2">{item.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* ===== CLIENT / STORE CARDS ===== */}
+          <div className="mt-16 grid sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
+            {[
+              {
+                icon: "https://cdn-icons-png.flaticon.com/512/1077/1077114.png",
+                title: "ลูกค้า",
+                desc: "ระบบจัดเก็บข้อมูลการรับประกันสินค้า สำหรับลูกค้า เพื่อความสะดวกในการตรวจสอบสถานะเอกสารและป้องกันการสูญหายของหลักฐานการรับประกัน",
+                btn: "เริ่มต้นสำหรับผู้ซื้อสินค้า",
+                gradient: "from-blue-400/50 to-blue-100/10",
+                to: "/signup?role=customer", // คงพฤติกรรมเดิม
+              },
+              {
+                icon: "https://cdn-icons-png.flaticon.com/512/1170/1170678.png",
+                title: "ร้านค้า",
+                desc: "ระบบบริหารจัดการการรับประกันสำหรับร้านค้า เพื่อเพิ่มประสิทธิภาพการให้บริการหลังการขายและวิเคราะห์ข้อมูลลูกค้าได้ง่ายขึ้น",
+                btn: "เริ่มต้นสำหรับร้านค้า",
+                gradient: "from-orange-400/50 to-orange-100/10",
+                to: "/signup?role=store", // คงพฤติกรรมเดิม
+              },
+            ].map((card, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 hover:shadow-2xl transition duration-500 text-center hover:-translate-y-2 hover:bg-gradient-to-b hover:from-white hover:to-[#f3f7ff]"
+              >
+                <div className="flex justify-center mb-4">
+                  <div className="relative animate-float">
+                    <div
+                      className={`absolute inset-0 bg-gradient-to-b ${card.gradient} rounded-full blur-lg opacity-80 w-20 h-20 mx-auto`}
+                    />
+                    <div className="relative w-20 h-20 flex items-center justify-center rounded-full bg-white/60 backdrop-blur-md shadow-md border border-white/30">
+                      <img
+                        src={card.icon}
+                        alt={card.title}
+                        className="w-12 h-12 object-contain z-10"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <h3 className="text-xl font-bold text-gray-900">{card.title}</h3>
+                <p className="mt-3 text-gray-600 text-sm leading-relaxed">{card.desc}</p>
+                <Link
+                  to={card.to}
+                  className="inline-block mt-5 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"
+                >
+                  {card.btn}
+                </Link>
               </div>
             ))}
           </div>
         </div>
+      </section>
 
-        {/* CTA */}
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-2xl border border-blue-200 p-8 text-center shadow">
-            <h3 className="text-xl sm:text-2xl font-extrabold text-gray-900">พร้อมเริ่มต้นแล้วหรือยัง?</h3>
-            <p className="mt-2 text-gray-600">
-              เริ่มต้นใช้งานฟรีสำหรับลูกค้า และทดลองระบบสำหรับร้านค้าได้ทันที
-            </p>
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-              <Link
-                to="/signin"
-                className="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 text-sm font-medium"
+      {/* ===== WHY CHOOSE ===== */}
+      <section className="bg-white py-24">
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <h2 className="text-3xl font-extrabold text-gray-900 mb-14">
+            ทำไมต้องเลือก Warranty
+          </h2>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {[
+              {
+                title: "จัดการใบรับประกัน",
+                icon: "/home-assets/icon-warranty.png",
+                desc: "บันทึกและเก็บเอกสารรับประกันในระบบดิจิทัล ปลอดภัยและค้นหาได้สะดวก",
+              },
+              {
+                title: "จัดการลูกค้า",
+                icon: "/home-assets/icon-crm.png",
+                desc: "ดูแลและบันทึกข้อมูลลูกค้าพร้อมประวัติการรับประกัน เพื่อบริการที่มีประสิทธิภาพ",
+              },
+              {
+                title: "รายงานและสถิติ",
+                icon: "/home-assets/icon-analytics.png",
+                desc: "เข้าถึงข้อมูลการขายและการเคลม เพื่อปรับกลยุทธ์และเพิ่มประสิทธิภาพธุรกิจ",
+              },
+              {
+                title: "แจ้งเตือนอัตโนมัติ",
+                icon: "/home-assets/icon-reminder.png",
+                desc: "ระบบแจ้งเตือนวันหมดอายุการรับประกันและสถานะเคลมให้ลูกค้าทราบแบบเรียลไทม์",
+              },
+            ].map((f, i) => (
+              <div
+                key={i}
+                className="bg-[#f9fbff] rounded-2xl p-8 shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-2 transition text-center"
               >
-                เข้าสู่ระบบ
-              </Link>
-              <Link
-                to="/signup"
-                className="inline-flex items-center justify-center rounded-xl border border-blue-600 text-blue-700 hover:bg-blue-50 px-5 py-2.5 text-sm font-medium"
-              >
-                สมัครสมาชิก
-              </Link>
-            </div>
+                <div className="flex justify-center mb-4">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-blue-100 rounded-full blur-md opacity-70 w-20 h-20 mx-auto" />
+                    <img
+                      src={f.icon}
+                      alt={f.title}
+                      className="relative w-20 h-20 object-contain z-10"
+                    />
+                  </div>
+                </div>
+                <h3 className="font-bold text-gray-900 text-lg">{f.title}</h3>
+                <p className="mt-2 text-sm text-gray-600">{f.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
-        {/* ไม่มี Footer ที่นี่ เพื่อตัดความซ้ำ */}
+      </section>
+
+      {/* ===== CTA ===== */}
+      <section className="bg-[#eaf3ff] py-20 text-center px-6 relative overflow-hidden">
+        {/* ถ้ามีไฟล์ /public/wave.svg จะเห็นลายคลื่นเลื่อนเบา ๆ */}
+        <div className="absolute top-0 left-0 w-full h-full bg-[url('/wave.svg')] opacity-10 bg-repeat-x animate-waveSlide" />
+        <h3 className="text-2xl font-bold text-gray-900 relative z-10">
+          พร้อมเริ่มต้นแล้วหรือยัง?
+        </h3>
+        <p className="text-gray-600 mt-3 max-w-lg mx-auto text-sm relative z-10">
+          เข้าร่วมร้านค้าและลูกค้าหลายพันรายที่เชื่อถือในระบบของเรา เริ่มต้นใช้งานได้ฟรีวันนี้
+        </p>
+        <div className="mt-8 flex flex-wrap gap-4 justify-center relative z-10">
+          <Link
+            to="/signin"
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition"
+          >
+            เข้าสู่ระบบ
+          </Link>
+          <Link
+            to="/signup"
+            className="px-6 py-2.5 bg-white border border-blue-600 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 transition"
+          >
+            สมัครสมาชิก
+          </Link>
+        </div>
       </section>
     </div>
   );

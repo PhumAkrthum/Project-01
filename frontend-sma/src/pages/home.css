@@ -1,0 +1,35 @@
+.wave-motion {
+  animation: waveParallax 10s ease-in-out infinite alternate;
+}
+
+@keyframes waveParallax {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50px);
+  }
+}
+
+.animate-float {
+  animation: floatUpDown 4s ease-in-out infinite;
+}
+
+@keyframes floatUpDown {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* background wave scroll */
+@keyframes waveSlide {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: 1000px;
+  }
+}

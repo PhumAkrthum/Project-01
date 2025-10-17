@@ -5,7 +5,8 @@ import { api } from '../lib/api'
 import { useAuth } from '../store/auth'
 import ImageUpload from '../components/ImageUpload'
 import ImagePreview from '../components/ImagePreview'
-import AppLogo from '../components/AppLogo' // ✅ ใช้โลโก้ที่คุณมีอยู่แล้ว
+import AppLogo from '../components/AppLogo'
+import Footer from '../components/Footer' // ✅ เพิ่มบรรทัดนี้
 
 const defaultFilters = [
   { value: 'all', label: 'ทั้งหมด' },
@@ -575,788 +576,793 @@ export default function WarrantyDashboard() {
   const storeEmail = storeProfile.email || user?.store?.email || user?.email || ''
 
   return (
-    <div className="min-h-screen bg-sky-50/80 pb-12">
-      <header className="border-b border-sky-100 bg-white/90 py-4 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sky-50 ring-1 ring-black/5">
-              <AppLogo className="h-7 w-7" />
+    <>
+      <div className="min-h-screen bg-sky-50/80 pb-12">
+        <header className="border-b border-sky-100 bg-white/90 py-4 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
+            <div className="flex items-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sky-50 ring-1 ring-black/5">
+                <AppLogo className="h-7 w-7" />
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-gray-900">Warranty</div>
+                <div className="text-sm text-gray-500">จัดการการรับประกันของคุณได้ในที่เดียว</div>
+              </div>
             </div>
-            <div>
-              <div className="text-lg font-semibold text-gray-900">Warranty</div>
-              <div className="text-sm text-gray-500">จัดการการรับประกันของคุณได้ในที่เดียว</div>
+            <div className="flex items-center gap-3" ref={profileMenuRef}>
+              <IconButton icon="🔔" label="การแจ้งเตือน" />
+              <IconButton icon="📅" label="กิจกรรม" />
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen((prev) => !prev)}
+                className="flex items-center gap-3 rounded-full bg-white px-3 py-2 shadow ring-1 ring-black/10 hover:bg-gray-50"
+              >
+                {profileAvatarSrc ? (
+                  <img src={profileAvatarSrc} alt="Store profile" className="h-10 w-10 rounded-full object-cover" />
+                ) : (
+                  <div className="grid h-10 w-10 place-items-center rounded-full bg-amber-300 text-xl">🏪</div>
+                )}
+                <div className="hidden text-left text-sm md:block">
+                  <div className="font-medium text-gray-900">{storeDisplayName}</div>
+                  <div className="text-xs text-gray-500">{storeEmail}</div>
+                </div>
+                <span className="hidden text-gray-400 md:inline">▾</span>
+              </button>
+              {isProfileMenuOpen && (
+                <div className="absolute right-4 top-16 w-60 rounded-2xl bg-white p-4 text-sm shadow-xl ring-1 ring-black/5">
+                  <div className="mb-4 flex items-center gap-3">
+                    {profileAvatarSrc ? (
+                      <img src={profileAvatarSrc} alt="Store profile" className="h-12 w-12 rounded-full object-cover" />
+                    ) : (
+                      <div className="grid h-12 w-12 place-items-center rounded-full bg-amber-200 text-2xl">🏪</div>
+                    )}
+                    <div>
+                      <div className="font-medium text-gray-900">{storeDisplayName}</div>
+                      <div className="text-xs text-gray-500">{storeEmail}</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openProfileModal}
+                    className="flex w-full items-center justify-between rounded-xl bg-amber-50 px-3 py-2 text-gray-700 hover:bg-amber-100"
+                  >
+                    <span>แก้ไขโปรไฟล์</span>
+                    <span aria-hidden>✏️</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="mt-2 flex w-full items-center justify-between rounded-xl px-3 py-2 text-gray-500 hover:bg-gray-50"
+                  >
+                    <span>ออกจากระบบ</span>
+                    <span aria-hidden>↪️</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-3" ref={profileMenuRef}>
-            <IconButton icon="🔔" label="การแจ้งเตือน" />
-            <IconButton icon="📅" label="กิจกรรม" />
-            <button
-              type="button"
-              onClick={() => setProfileMenuOpen((prev) => !prev)}
-              className="flex items-center gap-3 rounded-full bg-white px-3 py-2 shadow ring-1 ring-black/10 hover:bg-gray-50"
-            >
-              {profileAvatarSrc ? (
-                <img src={profileAvatarSrc} alt="Store profile" className="h-10 w-10 rounded-full object-cover" />
-              ) : (
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-amber-300 text-xl">🏪</div>
-              )}
-              <div className="hidden text-left text-sm md:block">
-                <div className="font-medium text-gray-900">{storeDisplayName}</div>
-                <div className="text-xs text-gray-500">{storeEmail}</div>
+        </header>
+
+        <main className="mx-auto mt-8 max-w-6xl px-4">
+          {dashboardError && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <span>{dashboardError}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDashboardError('')}
+                  className="rounded-full bg-white px-3 py-1 text-xs font-medium text-amber-600 shadow hover:bg-amber-100"
+                >
+                  ปิด
+                </button>
+                <button
+                  type="button"
+                  onClick={fetchDashboard}
+                  className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white shadow hover:bg-amber-400"
+                >
+                  ลองอีกครั้ง
+                </button>
               </div>
-              <span className="hidden text-gray-400 md:inline">▾</span>
-            </button>
-            {isProfileMenuOpen && (
-              <div className="absolute right-4 top-16 w-60 rounded-2xl bg-white p-4 text-sm shadow-xl ring-1 ring-black/5">
-                <div className="mb-4 flex items-center gap-3">
+            </div>
+          )}
+
+          <div className="rounded-3xl border border-sky-100 bg-gradient-to-b from-white to-sky-50 p-6 shadow-xl">
+            {dashboardLoading ? (
+              <div className="grid min-h-[320px] place-items-center text-sm text-gray-500">กำลังโหลดข้อมูล...</div>
+            ) : !storeIdResolved ? (
+              <div className="grid min-h-[320px] place-items-center text-center text-sm text-gray-500">
+                <div>
+                  <div className="text-base font-medium text-gray-700">หน้านี้สำหรับบัญชีร้านค้าเท่านั้น</div>
+                  <p className="mt-1 text-xs text-gray-500">กรุณาเข้าสู่ระบบด้วยบัญชีร้านค้าเพื่อเข้าถึงแดชบอร์ด</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+                  <SectionTitle>จัดการการรับประกัน</SectionTitle>
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-2 rounded-full bg-white p-1"></div>
+                    <button
+                      type="button"
+                      onClick={() => openWarrantyModal('create')}
+                      className="rounded-full bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-sky-500"
+                    >
+                      สร้างใบรับประกัน
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-6 flex flex-wrap items-center gap-3">
+                  <div className="flex flex-1 items-center rounded-2xl bg-white px-4 py-2 shadow ring-1 ring-black/5">
+                    <span className="text-gray-400">🔍</span>
+                    <input
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      className="w-full bg-transparent px-3 py-2 text-sm focus:outline-none"
+                      placeholder="ค้นหาด้วยรหัสใบรับประกัน, ชื่อลูกค้า, อีเมลลูกค้า, ชื่อสินค้า"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {filters.map((filter) => {
+                      const isActiveFilter = activeFilter === filter.value
+                      const activeClass = isActiveFilter
+                        ? filter.value === 'active'
+                          ? 'bg-emerald-500 text-white'
+                          : filter.value === 'nearing_expiration'
+                          ? 'bg-amber-500 text-white'
+                          : filter.value === 'expired'
+                          ? 'bg-rose-500 text-white'
+                          : 'bg-gray-900 text-white'
+                        : 'bg-white text-gray-500 hover:bg-gray-50'
+                      return (
+                        <button
+                          key={filter.value}
+                          type="button"
+                          onClick={() => setActiveFilter(filter.value)}
+                          className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm transition ${activeClass}`}
+                        >
+                          {filter.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* รายการใบรับประกัน (แบ่งหน้า 5 ใบ/หน้า) */}
+                <div className="mb-8 grid gap-4">
+                  {paginatedHeaders.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500">
+                      ยังไม่มีใบรับประกัน
+                    </div>
+                  ) : (
+                    paginatedHeaders.map(header => {
+                      const expanded = !!expandedByHeader[header.id]
+                      return (
+                        <div key={header.id} className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="text-lg font-semibold text-gray-900">Warranty Card</div>
+                              <div className="mt-2 grid gap-1 text-sm text-gray-700 md:grid-cols-2">
+                                <div>รหัสใบรับประกัน: <span className="font-medium text-gray-900">{header.code || '-'}</span></div>
+                                <div>ลูกค้า: <span className="font-medium text-gray-900">{header.customerName || '-'}</span></div>
+                                <div>เบอร์โทรศัพท์: <span className="font-medium text-gray-900">{header.customerPhone || '-'}</span></div>
+                                <div>อีเมลลูกค้า: <span className="font-medium text-gray-900">{header.customerEmail || '-'}</span></div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => header && handleDownloadPdf(header.id)}
+                                disabled={!header || downloadingPdfId === header.id}
+                                className={`h-10 min-w-[96px] rounded-full bg-sky-500 px-5 text-sm font-medium text-white shadow transition ${!header || downloadingPdfId === header.id ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-400'}`}
+                              >
+                                {downloadingPdfId === header.id ? 'กำลังดาวน์โหลด…' : 'PDF'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedByHeader(prev => ({ ...prev, [header.id]: !prev[header.id] }))}
+                                className="rounded-full border border-amber-300 px-4 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-100"
+                              >
+                                {expanded ? 'ซ่อนรายละเอียด' : 'รายละเอียดเพิ่มเติม'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* สรุปรายการในใบ */}
+                          <p className="mt-4 rounded-xl bg-white/60 p-3 text-xs text-amber-700">
+                            ใบนี้มีทั้งหมด {header._filteredItems?.length ?? header.items?.length ?? 0} รายการ
+                          </p>
+
+                          {/* รายการในใบ */}
+                          {expanded && (
+                            <div className="mt-4 grid gap-4">
+                              {(header._filteredItems || []).map((it) => (
+                                <div key={it.id} className="flex flex-col justify-between gap-6 rounded-2xl bg-white p-4 shadow ring-1 ring-black/5 md:flex-row">
+                                  <div className="flex-1 space-y-3">
+                                    <div className="flex flex-wrap items-center gap-3">
+                                      <div className="text-base font-semibold text-gray-900">{it.productName}</div>
+                                      <StatusBadge label={it.statusTag} className={it.statusColor} />
+                                      <span className="text-xs text-gray-400">#{it.id}</span>
+                                    </div>
+                                    <div className="grid gap-2 text-sm text-gray-600 md:grid-cols-2">
+                                      <div>Serial No.: <span className="font-medium text-gray-900">{it.serial || '-'}</span></div>
+                                      <div>วันที่ซื้อ: <span className="font-medium text-gray-900">{it.purchaseDate || '-'}</span></div>
+                                      <div>วันหมดอายุ: <span className="font-medium text-gray-900">{it.expiryDate || '-'}</span></div>
+                                      <div>จำนวนวันคงเหลือ: <span className="font-medium text-gray-900">{it.daysLeft ?? 0} วัน</span></div>
+                                    </div>
+                                    <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-800">{it.coverageNote || '-'}</p>
+
+                                    {it.images && it.images.length > 0 && (
+                                      <div className="space-y-2">
+                                        <div className="text-sm font-medium text-gray-700">รูปภาพประกอบ</div>
+                                        <div className="flex gap-2 overflow-x-auto">
+                                          {it.images.map((image, index) => (
+                                            <div key={image.id || index} className="group relative flex-shrink-0 cursor-pointer">
+                                              <img
+                                                src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${image.url}`}
+                                                alt={image.originalName || 'Warranty image'}
+                                                className="h-20 w-20 rounded-lg object-cover transition-transform group-hover:scale-105"
+                                                onClick={() => setImagePreview({ open: true, images: it.images, index })}
+                                                onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                              />
+                                              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                                                <span className="text-xs text-white">👁️</span>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="grid place-items-center gap-4">
+                                    <div className="relative h-32 w-40 overflow-hidden rounded-2xl border border-gray-300 bg-gray-50">
+                                      {it.images && it.images.length > 0 ? (
+                                        <div
+                                          className="group relative h-full w-full cursor-pointer"
+                                          onClick={() => setImagePreview({ open: true, images: it.images, index: 0 })}
+                                        >
+                                          <img
+                                            src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${it.images[0].url}`}
+                                            alt="Warranty preview"
+                                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                          />
+                                          {it.images.length > 1 && (
+                                            <div className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-1 text-xs text-white">
+                                              +{it.images.length - 1}
+                                            </div>
+                                          )}
+                                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                                            <span className="text-white">👁️ ดูรูป</span>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
+                                          <div className="text-center">
+                                            <div className="mb-1 text-2xl">📷</div>
+                                            <div>ไม่มีรูปภาพ</div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => openWarrantyModal('edit', it)}
+                                      className="flex items-center gap-2 rounded-full border border-sky-500 px-4 py-2 text-sm font-medium text-sky-600 hover:bg-sky-50"
+                                    >
+                                      <span>แก้ไข</span>
+                                      <span aria-hidden>✏️</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+
+                {/* ✅ Pagination footer */}
+                {filteredHeaders.length > 0 && (
+                  <div className="mt-6 flex flex-col items-center gap-3 md:flex-row md:justify-between">
+                    <div className="text-xs text-gray-500">
+                      หน้า <span className="font-medium text-gray-900">{currentPage}</span> จาก{' '}
+                      <span className="font-medium text-gray-900">{totalPages}</span>
+                      {' • '}
+                      แสดง {Math.min((currentPage - 1) * PAGE_SIZE + 1, filteredHeaders.length)}–
+                      {Math.min(currentPage * PAGE_SIZE, filteredHeaders.length)} จาก {filteredHeaders.length} ใบ
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
+                          currentPage === 1
+                            ? 'cursor-not-allowed bg-white text-gray-300 ring-1 ring-black/10'
+                            : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
+                        }`}
+                      >
+                        ก่อนหน้า
+                      </button>
+                      {pages.map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setPage(n)}
+                          className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
+                            n === currentPage ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
+                          currentPage === totalPages
+                            ? 'cursor-not-allowed bg-white text-gray-300 ring-1 ring-black/10'
+                            : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
+                        }`}
+                      >
+                        ถัดไป
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </main>
+
+        {isProfileModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+            <div className="w-full max-w-lg rounded-3xl border border-amber-200 bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-amber-100 px-6 py-4">
+                <div className="flex items-center gap-3">
                   {profileAvatarSrc ? (
                     <img src={profileAvatarSrc} alt="Store profile" className="h-12 w-12 rounded-full object-cover" />
                   ) : (
                     <div className="grid h-12 w-12 place-items-center rounded-full bg-amber-200 text-2xl">🏪</div>
                   )}
                   <div>
-                    <div className="font-medium text-gray-900">{storeDisplayName}</div>
-                    <div className="text-xs text-gray-500">{storeEmail}</div>
+                    <div className="text-base font-semibold text-gray-900">แก้ไขข้อมูลโปรไฟล์</div>
+                    <div className="text-xs text-amber-600">ข้อมูลจะใช้โชว์ในหัวหน้า dashboard</div>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={openProfileModal}
-                  className="flex w-full items-center justify-between rounded-xl bg-amber-50 px-3 py-2 text-gray-700 hover:bg-amber-100"
+                  onClick={() => {
+                    setProfileModalOpen(false)
+                    setModalError('')
+                    setProfileSubmitting(false)
+                    setPasswordSubmitting(false)
+                  }}
+                  className="text-2xl text-gray-400 hover:text-gray-600"
                 >
-                  <span>แก้ไขโปรไฟล์</span>
-                  <span aria-hidden>✏️</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="mt-2 flex w-full items-center justify-between rounded-xl px-3 py-2 text-gray-500 hover:bg-gray-50"
-                >
-                  <span>ออกจากระบบ</span>
-                  <span aria-hidden>↪️</span>
+                  ×
                 </button>
               </div>
-            )}
-          </div>
-        </div>
-      </header>
 
-      <main className="mx-auto mt-8 max-w-6xl px-4">
-        {dashboardError && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            <span>{dashboardError}</span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setDashboardError('')}
-                className="rounded-full bg-white px-3 py-1 text-xs font-medium text-amber-600 shadow hover:bg-amber-100"
-              >
-                ปิด
-              </button>
-              <button
-                type="button"
-                onClick={fetchDashboard}
-                className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white shadow hover:bg-amber-400"
-              >
-                ลองอีกครั้ง
-              </button>
+              <div className="px-6 pt-4">
+                <div className="mb-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setProfileTab('info'); setModalError('') }}
+                    className={`flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${profileTab === 'info' ? 'bg-amber-100 text-amber-700' : 'bg-amber-50 text-gray-500'}`}
+                  >
+                    ข้อมูลร้านค้า
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setProfileTab('password'); setModalError('') }}
+                    className={`flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${profileTab === 'password' ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-50 text-gray-500'}`}
+                  >
+                    เปลี่ยนรหัสผ่าน
+                  </button>
+                </div>
+              </div>
+
+              {profileTab === 'info' ? (
+                <form onSubmit={handleProfileSubmit} className="px-6 pb-6">
+                  <input ref={profileImageInputRef} accept="image/*" className="hidden" onChange={handleProfileAvatarSelect} type="file" />
+                  <div className="mb-4 flex items-center gap-4">
+                    {profileAvatarSrc ? (
+                      <img src={profileAvatarSrc} alt="Store profile" className="h-16 w-16 rounded-full object-cover" />
+                    ) : (
+                      <div className="grid h-16 w-16 place-items-center rounded-full bg-amber-200 text-3xl">🏪</div>
+                    )}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => profileImageInputRef.current?.click()}
+                        className="rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-amber-400"
+                      >
+                        อัปโหลดรูปใหม่
+                      </button>
+                      <div className="mt-1 text-xs text-gray-400">รองรับไฟล์ .jpg, .png ขนาดไม่เกิน 2 MB</div>
+                    </div>
+                  </div>
+                  {modalError && profileTab === 'info' && (
+                    <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{modalError}</div>
+                  )}
+                  <div className="grid gap-3">
+                    {[
+                      ['storeName', 'ชื่อร้าน'],
+                      ['contactName', 'ชื่อผู้ติดต่อ'],
+                      ['email', 'อีเมล'],
+                      ['phone', 'เบอร์ติดต่อ'],
+                      ['address', 'ที่อยู่'],
+                      ['businessHours', 'เวลาทำการ'],
+                    ].map(([key, label]) => (
+                      <label key={key} className="text-sm text-gray-600">
+                        {label}
+                        <input
+                          required
+                          value={storeProfile[key] ?? ''}
+                          onChange={(e) => setStoreProfile((prev) => ({ ...prev, [key]: e.target.value }))}
+                          className="mt-1 w-full rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-2 text-sm text-gray-900 focus:border-amber-300 focus:outline-none"
+                          type="text"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={profileSubmitting}
+                      className={`rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow transition ${profileSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-500'}`}
+                    >
+                      {profileSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handlePasswordSubmit} className="px-6 pb-6">
+                  {modalError && profileTab === 'password' && (
+                    <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{modalError}</div>
+                  )}
+                  <div className="grid gap-3">
+                    {[
+                      ['currentPassword', 'รหัสผ่านเก่า'],
+                      ['newPassword', 'รหัสผ่านใหม่'],
+                      ['confirmPassword', 'ยืนยันรหัสผ่านใหม่'],
+                    ].map(([key, label]) => (
+                      <label key={key} className="text-sm text-gray-600">
+                        {label}
+                        <input
+                          required
+                          value={profilePasswords[key]}
+                          onChange={(e) => setProfilePasswords((prev) => ({ ...prev, [key]: e.target.value }))}
+                          className="mt-1 w-full rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-2 text-sm text-gray-900 focus:border-emerald-300 focus:outline-none"
+                          type="password"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={passwordSubmitting}
+                      className={`rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow transition ${passwordSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-emerald-400'}`}
+                    >
+                      {passwordSubmitting ? 'กำลังบันทึก...' : 'ยืนยัน'}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         )}
 
-        <div className="rounded-3xl border border-sky-100 bg-gradient-to-b from-white to-sky-50 p-6 shadow-xl">
-          {dashboardLoading ? (
-            <div className="grid min-h-[320px] place-items-center text-sm text-gray-500">กำลังโหลดข้อมูล...</div>
-          ) : !storeIdResolved ? (
-            <div className="grid min-h-[320px] place-items-center text-center text-sm text-gray-500">
-              <div>
-                <div className="text-base font-medium text-gray-700">หน้านี้สำหรับบัญชีร้านค้าเท่านั้น</div>
-                <p className="mt-1 text-xs text-gray-500">กรุณาเข้าสู่ระบบด้วยบัญชีร้านค้าเพื่อเข้าถึงแดชบอร์ด</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-                <SectionTitle>จัดการการรับประกัน</SectionTitle>
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-2 rounded-full bg-white p-1"></div>
-                  <button
-                    type="button"
-                    onClick={() => openWarrantyModal('create')}
-                    className="rounded-full bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-sky-500"
-                  >
-                    สร้างใบรับประกัน
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-6 flex flex-wrap items-center gap-3">
-                <div className="flex flex-1 items-center rounded-2xl bg-white px-4 py-2 shadow ring-1 ring-black/5">
-                  <span className="text-gray-400">🔍</span>
-                  <input
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    className="w-full bg-transparent px-3 py-2 text-sm focus:outline-none"
-                    placeholder="ค้นหาด้วยรหัสใบรับประกัน, ชื่อลูกค้า, อีเมลลูกค้า, ชื่อสินค้า"
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {filters.map((filter) => {
-                    const isActiveFilter = activeFilter === filter.value
-                    const activeClass = isActiveFilter
-                      ? filter.value === 'active'
-                        ? 'bg-emerald-500 text-white'
-                        : filter.value === 'nearing_expiration'
-                        ? 'bg-amber-500 text-white'
-                        : filter.value === 'expired'
-                        ? 'bg-rose-500 text-white'
-                        : 'bg-gray-900 text-white'
-                      : 'bg-white text-gray-500 hover:bg-gray-50'
-                    return (
-                      <button
-                        key={filter.value}
-                        type="button"
-                        onClick={() => setActiveFilter(filter.value)}
-                        className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm transition ${activeClass}`}
-                      >
-                        {filter.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* รายการใบรับประกัน (แบ่งหน้า 5 ใบ/หน้า) */}
-              <div className="mb-8 grid gap-4">
-                {paginatedHeaders.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500">
-                    ยังไม่มีใบรับประกัน
-                  </div>
-                ) : (
-                  paginatedHeaders.map(header => {
-                    const expanded = !!expandedByHeader[header.id]
-                    return (
-                      <div key={header.id} className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="text-lg font-semibold text-gray-900">Warranty Card</div>
-                            <div className="mt-2 grid gap-1 text-sm text-gray-700 md:grid-cols-2">
-                              <div>รหัสใบรับประกัน: <span className="font-medium text-gray-900">{header.code || '-'}</span></div>
-                              <div>ลูกค้า: <span className="font-medium text-gray-900">{header.customerName || '-'}</span></div>
-                              <div>เบอร์โทรศัพท์: <span className="font-medium text-gray-900">{header.customerPhone || '-'}</span></div>
-                              <div>อีเมลลูกค้า: <span className="font-medium text-gray-900">{header.customerEmail || '-'}</span></div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col items-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => header && handleDownloadPdf(header.id)}
-                              disabled={!header || downloadingPdfId === header.id}
-                              className={`h-10 min-w-[96px] rounded-full bg-sky-500 px-5 text-sm font-medium text-white shadow transition ${!header || downloadingPdfId === header.id ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-400'}`}
-                            >
-                              {downloadingPdfId === header.id ? 'กำลังดาวน์โหลด…' : 'PDF'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setExpandedByHeader(prev => ({ ...prev, [header.id]: !prev[header.id] }))}
-                              className="rounded-full border border-amber-300 px-4 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-100"
-                            >
-                              {expanded ? 'ซ่อนรายละเอียด' : 'รายละเอียดเพิ่มเติม'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* สรุปรายการในใบ */}
-                        <p className="mt-4 rounded-xl bg-white/60 p-3 text-xs text-amber-700">
-                          ใบนี้มีทั้งหมด {header._filteredItems?.length ?? header.items?.length ?? 0} รายการ
-                        </p>
-
-                        {/* รายการในใบ */}
-                        {expanded && (
-                          <div className="mt-4 grid gap-4">
-                            {(header._filteredItems || []).map((it) => (
-                              <div key={it.id} className="flex flex-col justify-between gap-6 rounded-2xl bg-white p-4 shadow ring-1 ring-black/5 md:flex-row">
-                                <div className="flex-1 space-y-3">
-                                  <div className="flex flex-wrap items-center gap-3">
-                                    <div className="text-base font-semibold text-gray-900">{it.productName}</div>
-                                    <StatusBadge label={it.statusTag} className={it.statusColor} />
-                                    <span className="text-xs text-gray-400">#{it.id}</span>
-                                  </div>
-                                  <div className="grid gap-2 text-sm text-gray-600 md:grid-cols-2">
-                                    <div>Serial No.: <span className="font-medium text-gray-900">{it.serial || '-'}</span></div>
-                                    <div>วันที่ซื้อ: <span className="font-medium text-gray-900">{it.purchaseDate || '-'}</span></div>
-                                    <div>วันหมดอายุ: <span className="font-medium text-gray-900">{it.expiryDate || '-'}</span></div>
-                                    <div>จำนวนวันคงเหลือ: <span className="font-medium text-gray-900">{it.daysLeft ?? 0} วัน</span></div>
-                                  </div>
-                                  <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-800">{it.coverageNote || '-'}</p>
-
-                                  {it.images && it.images.length > 0 && (
-                                    <div className="space-y-2">
-                                      <div className="text-sm font-medium text-gray-700">รูปภาพประกอบ</div>
-                                      <div className="flex gap-2 overflow-x-auto">
-                                        {it.images.map((image, index) => (
-                                          <div key={image.id || index} className="group relative flex-shrink-0 cursor-pointer">
-                                            <img
-                                              src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${image.url}`}
-                                              alt={image.originalName || 'Warranty image'}
-                                              className="h-20 w-20 rounded-lg object-cover transition-transform group-hover:scale-105"
-                                              onClick={() => setImagePreview({ open: true, images: it.images, index })}
-                                              onError={(e) => { e.currentTarget.style.display = 'none' }}
-                                            />
-                                            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                                              <span className="text-xs text-white">👁️</span>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="grid place-items-center gap-4">
-                                  <div className="relative h-32 w-40 overflow-hidden rounded-2xl border border-gray-300 bg-gray-50">
-                                    {it.images && it.images.length > 0 ? (
-                                      <div
-                                        className="group relative h-full w-full cursor-pointer"
-                                        onClick={() => setImagePreview({ open: true, images: it.images, index: 0 })}
-                                      >
-                                        <img
-                                          src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${it.images[0].url}`}
-                                          alt="Warranty preview"
-                                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                                        />
-                                        {it.images.length > 1 && (
-                                          <div className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-1 text-xs text-white">
-                                            +{it.images.length - 1}
-                                          </div>
-                                        )}
-                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                                          <span className="text-white">👁️ ดูรูป</span>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
-                                        <div className="text-center">
-                                          <div className="mb-1 text-2xl">📷</div>
-                                          <div>ไม่มีรูปภาพ</div>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => openWarrantyModal('edit', it)}
-                                    className="flex items-center gap-2 rounded-full border border-sky-500 px-4 py-2 text-sm font-medium text-sky-600 hover:bg-sky-50"
-                                  >
-                                    <span>แก้ไข</span>
-                                    <span aria-hidden>✏️</span>
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-
-              {/* ✅ Pagination footer */}
-              {filteredHeaders.length > 0 && (
-                <div className="mt-6 flex flex-col items-center gap-3 md:flex-row md:justify-between">
-                  <div className="text-xs text-gray-500">
-                    หน้า <span className="font-medium text-gray-900">{currentPage}</span> จาก{' '}
-                    <span className="font-medium text-gray-900">{totalPages}</span>
-                    {' • '}
-                    แสดง {Math.min((currentPage - 1) * PAGE_SIZE + 1, filteredHeaders.length)}–
-                    {Math.min(currentPage * PAGE_SIZE, filteredHeaders.length)} จาก {filteredHeaders.length} ใบ
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
-                        currentPage === 1
-                          ? 'cursor-not-allowed bg-white text-gray-300 ring-1 ring-black/10'
-                          : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
-                      }`}
-                    >
-                      ก่อนหน้า
-                    </button>
-                    {pages.map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setPage(n)}
-                        className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
-                          n === currentPage ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
-                        }`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
-                        currentPage === totalPages
-                          ? 'cursor-not-allowed bg-white text-gray-300 ring-1 ring-black/10'
-                          : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
-                      }`}
-                    >
-                      ถัดไป
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </main>
-
-      {isProfileModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-lg rounded-3xl border border-amber-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-amber-100 px-6 py-4">
-              <div className="flex items-center gap-3">
-                {profileAvatarSrc ? (
-                  <img src={profileAvatarSrc} alt="Store profile" className="h-12 w-12 rounded-full object-cover" />
-                ) : (
-                  <div className="grid h-12 w-12 place-items-center rounded-full bg-amber-200 text-2xl">🏪</div>
-                )}
+        {isWarrantyModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+            <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+              {/* header */}
+              <div className="flex items-center justify-between rounded-t-3xl bg-sky-600 px-6 py-4 text-white">
                 <div>
-                  <div className="text-base font-semibold text-gray-900">แก้ไขข้อมูลโปรไฟล์</div>
-                  <div className="text-xs text-amber-600">ข้อมูลจะใช้โชว์ในหัวหน้า dashboard</div>
+                  <div className="text-base font-semibold">{modalMode === 'create' ? 'สร้างใบรับประกันใหม่' : 'แก้ไขรายการสินค้า'}</div>
+                  {modalMode === 'create' && <div className="text-xs text-sky-100">ใบรับประกัน 1 ใบ สามารถเพิ่มสินค้าหลายรายการได้</div>}
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setProfileModalOpen(false)
-                  setModalError('')
-                  setProfileSubmitting(false)
-                  setPasswordSubmitting(false)
-                }}
-                className="text-2xl text-gray-400 hover:text-gray-600"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="px-6 pt-4">
-              <div className="mb-4 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => { setProfileTab('info'); setModalError('') }}
-                  className={`flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${profileTab === 'info' ? 'bg-amber-100 text-amber-700' : 'bg-amber-50 text-gray-500'}`}
+                  onClick={() => { setWarrantyModalOpen(false); setWarrantyModalError(''); setWarrantySubmitting(false) }}
+                  className="text-2xl text-white/80 hover:text-white"
                 >
-                  ข้อมูลร้านค้า
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setProfileTab('password'); setModalError('') }}
-                  className={`flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${profileTab === 'password' ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-50 text-gray-500'}`}
-                >
-                  เปลี่ยนรหัสผ่าน
+                  ×
                 </button>
               </div>
-            </div>
 
-            {profileTab === 'info' ? (
-              <form onSubmit={handleProfileSubmit} className="px-6 pb-6">
-                <input ref={profileImageInputRef} accept="image/*" className="hidden" onChange={handleProfileAvatarSelect} type="file" />
-                <div className="mb-4 flex items-center gap-4">
-                  {profileAvatarSrc ? (
-                    <img src={profileAvatarSrc} alt="Store profile" className="h-16 w-16 rounded-full object-cover" />
-                  ) : (
-                    <div className="grid h-16 w-16 place-items-center rounded-full bg-amber-200 text-3xl">🏪</div>
+              <form className="grid" onSubmit={handleWarrantySubmit}>
+                <div className="max-h-[85vh] overflow-y-auto px-6 pt-5 pb-3">
+                  {warrantyModalError && (
+                    <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{warrantyModalError}</div>
                   )}
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => profileImageInputRef.current?.click()}
-                      className="rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-amber-400"
-                    >
-                      อัปโหลดรูปใหม่
-                    </button>
-                    <div className="mt-1 text-xs text-gray-400">รองรับไฟล์ .jpg, .png ขนาดไม่เกิน 2 MB</div>
-                  </div>
-                </div>
-                {modalError && profileTab === 'info' && (
-                  <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{modalError}</div>
-                )}
-                <div className="grid gap-3">
-                  {[
-                    ['storeName', 'ชื่อร้าน'],
-                    ['contactName', 'ชื่อผู้ติดต่อ'],
-                    ['email', 'อีเมล'],
-                    ['phone', 'เบอร์ติดต่อ'],
-                    ['address', 'ที่อยู่'],
-                    ['businessHours', 'เวลาทำการ'],
-                  ].map(([key, label]) => (
-                    <label key={key} className="text-sm text-gray-600">
-                      {label}
-                      <input
-                        required
-                        value={storeProfile[key] ?? ''}
-                        onChange={(e) => setStoreProfile((prev) => ({ ...prev, [key]: e.target.value }))}
-                        className="mt-1 w-full rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-2 text-sm text-gray-900 focus:border-amber-300 focus:outline-none"
-                        type="text"
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div className="mt-6 flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={profileSubmitting}
-                    className={`rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow transition ${profileSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-500'}`}
-                  >
-                    {profileSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <form onSubmit={handlePasswordSubmit} className="px-6 pb-6">
-                {modalError && profileTab === 'password' && (
-                  <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{modalError}</div>
-                )}
-                <div className="grid gap-3">
-                  {[
-                    ['currentPassword', 'รหัสผ่านเก่า'],
-                    ['newPassword', 'รหัสผ่านใหม่'],
-                    ['confirmPassword', 'ยืนยันรหัสผ่านใหม่'],
-                  ].map(([key, label]) => (
-                    <label key={key} className="text-sm text-gray-600">
-                      {label}
-                      <input
-                        required
-                        value={profilePasswords[key]}
-                        onChange={(e) => setProfilePasswords((prev) => ({ ...prev, [key]: e.target.value }))}
-                        className="mt-1 w-full rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-2 text-sm text-gray-900 focus:border-emerald-300 focus:outline-none"
-                        type="password"
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div className="mt-6 flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={passwordSubmitting}
-                    className={`rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow transition ${passwordSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-emerald-400'}`}
-                  >
-                    {passwordSubmitting ? 'กำลังบันทึก...' : 'ยืนยัน'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
 
-      {isWarrantyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
-            {/* header */}
-            <div className="flex items-center justify-between rounded-t-3xl bg-sky-600 px-6 py-4 text-white">
-              <div>
-                <div className="text-base font-semibold">{modalMode === 'create' ? 'สร้างใบรับประกันใหม่' : 'แก้ไขรายการสินค้า'}</div>
-                {modalMode === 'create' && <div className="text-xs text-sky-100">ใบรับประกัน 1 ใบ สามารถเพิ่มสินค้าหลายรายการได้</div>}
-              </div>
-              <button
-                type="button"
-                onClick={() => { setWarrantyModalOpen(false); setWarrantyModalError(''); setWarrantySubmitting(false) }}
-                className="text-2xl text-white/80 hover:text-white"
-              >
-                ×
-              </button>
-            </div>
-
-            <form className="grid" onSubmit={handleWarrantySubmit}>
-              <div className="max-h-[85vh] overflow-y-auto px-6 pt-5 pb-3">
-                {warrantyModalError && (
-                  <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{warrantyModalError}</div>
-                )}
-
-                {modalMode === 'edit' ? (
-                  <>
-                    {/* ฟอร์มแก้ไขแบบ controlled + auto-expiry */}
-                    <label className="text-sm text-gray-600">
-                      ชื่อสินค้า
-                      <input
-                        name="product_name"
-                        value={editForm?.product_name ?? ''}
-                        onChange={e => setEditForm(f => ({ ...f, product_name: e.target.value }))}
-                        className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                        placeholder="กรอกชื่อสินค้า"
-                        type="text"
-                        required
-                      />
-                    </label>
-
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {modalMode === 'edit' ? (
+                    <>
+                      {/* ฟอร์มแก้ไขแบบ controlled + auto-expiry */}
                       <label className="text-sm text-gray-600">
-                        ระยะเวลา (เดือน)
-                        <select
-                          name="duration_months"
-                          value={editForm?.duration_months ?? 12}
-                          onChange={e => {
-                            const v = Number(e.target.value || 12)
-                            setEditForm(f => {
-                              const next = { ...f, duration_months: v }
-                              if (!manualExpiry) next.expiry_date = computeExpiry(next.purchase_date, v)
-                              return next
-                            })
-                          }}
-                          className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                        >
-                          {[6, 12, 18, 24].map(month => (
-                            <option key={month} value={month}>{month} เดือน</option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className="text-sm text-gray-600">
-                        Serial No.
+                        ชื่อสินค้า
                         <input
-                          name="serial"
-                          value={editForm?.serial ?? ''}
-                          onChange={e => setEditForm(f => ({ ...f, serial: e.target.value }))}
+                          name="product_name"
+                          value={editForm?.product_name ?? ''}
+                          onChange={e => setEditForm(f => ({ ...f, product_name: e.target.value }))}
                           className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                          placeholder="กรอก Serial No."
+                          placeholder="กรอกชื่อสินค้า"
                           type="text"
                           required
                         />
                       </label>
-                    </div>
 
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      <label className="text-sm text-gray-600">
-                        วันเริ่ม
-                        <input
-                          name="purchase_date"
-                          value={editForm?.purchase_date ?? ''}
-                          onChange={e => {
-                            const v = e.target.value
-                            setEditForm(f => {
-                              const next = { ...f, purchase_date: v }
-                              if (!manualExpiry) next.expiry_date = computeExpiry(v, next.duration_months)
-                              return next
-                            })
-                          }}
-                          className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                          type="date"
-                          required
-                        />
-                      </label>
-                      <label className="text-sm text-gray-600">
-                        วันหมดอายุ (คำนวณอัตโนมัติหากไม่ได้แก้ไข)
-                        <input
-                          name="expiry_date"
-                          value={editForm?.expiry_date ?? ''}
-                          onChange={e => {
-                            setManualExpiry(true)
-                            setEditForm(f => ({ ...f, expiry_date: e.target.value }))
-                          }}
-                          onBlur={() => {
-                            setManualExpiry(prev => (editForm?.expiry_date ? prev : false))
-                          }}
-                          className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                          type="date"
-                        />
-                      </label>
-                    </div>
-
-                    <label className="mt-3 text-sm text-gray-600">
-                      เงื่อนไขการรับประกัน
-                      <textarea
-                        name="warranty_terms"
-                        value={editForm?.warranty_terms ?? ''}
-                        onChange={e => setEditForm(f => ({ ...f, warranty_terms: e.target.value }))}
-                        className="mt-1 min-h-[96px] w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                        placeholder="กรอกเงื่อนไขการรับประกัน"
-                        required
-                      />
-                    </label>
-
-                    <div className="mt-3 space-y-2">
-                      <label className="text-sm text-gray-600">รูปภาพประกอบ</label>
-                      <ImageUpload
-                        images={warrantyImages}
-                        onUpload={handleImageUpload}
-                        onDelete={handleImageDelete}
-                        maxImages={5}
-                        disabled={warrantySubmitting}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* โหมดสร้างหลายรายการในใบเดียว */}
-                    {createItems.map((it, idx) => (
-                      <div key={idx} className="mb-6 rounded-2xl border border-sky-100 bg-sky-50/40 p-4">
-                        <div className="mb-2 flex items-center justify-between">
-                          <div className="text-sm font-semibold text-sky-700">รายการที่ {idx + 1}</div>
-                          {createItems.length > 1 && (
-                            <button type="button" onClick={() => removeItem(idx)} className="text-xs text-rose-600 hover:underline">
-                              ลบรายการ
-                            </button>
-                          )}
-                        </div>
-
-                        <label className="text-sm text-gray-600 block">
-                          อีเมลลูกค้า
-                          <input
-                            value={it.customer_email}
-                            onChange={e => patchItem(idx, { customer_email: e.target.value })}
-                            className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                            placeholder="กรอกอีเมลลูกค้า"
-                            type="email"
-                            required
-                          />
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <label className="text-sm text-gray-600">
+                          ระยะเวลา (เดือน)
+                          <select
+                            name="duration_months"
+                            value={editForm?.duration_months ?? 12}
+                            onChange={e => {
+                              const v = Number(e.target.value || 12)
+                              setEditForm(f => {
+                                const next = { ...f, duration_months: v }
+                                if (!manualExpiry) next.expiry_date = computeExpiry(next.purchase_date, v)
+                                return next
+                              })
+                            }}
+                            className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                          >
+                            {[6, 12, 18, 24].map(month => (
+                              <option key={month} value={month}>{month} เดือน</option>
+                            ))}
+                          </select>
                         </label>
 
-                        <label className="mt-3 text-sm text-gray-600 block">
-                          ชื่อสินค้า
+                        <label className="text-sm text-gray-600">
+                          Serial No.
                           <input
-                            value={it.product_name}
-                            onChange={e => patchItem(idx, { product_name: e.target.value })}
-                            className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                            placeholder="กรอกชื่อสินค้า"
+                            name="serial"
+                            value={editForm?.serial ?? ''}
+                            onChange={e => setEditForm(f => ({ ...f, serial: e.target.value }))}
+                            className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                            placeholder="กรอก Serial No."
                             type="text"
                             required
                           />
                         </label>
+                      </div>
 
-                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <label className="text-sm text-gray-600">
+                          วันเริ่ม
+                          <input
+                            name="purchase_date"
+                            value={editForm?.purchase_date ?? ''}
+                            onChange={e => {
+                              const v = e.target.value
+                              setEditForm(f => {
+                                const next = { ...f, purchase_date: v }
+                                if (!manualExpiry) next.expiry_date = computeExpiry(v, next.duration_months)
+                                return next
+                              })
+                            }}
+                            className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                            type="date"
+                            required
+                          />
+                        </label>
+                        <label className="text-sm text-gray-600">
+                          วันหมดอายุ (คำนวณอัตโนมัติหากไม่ได้แก้ไข)
+                          <input
+                            name="expiry_date"
+                            value={editForm?.expiry_date ?? ''}
+                            onChange={e => {
+                              setManualExpiry(true)
+                              setEditForm(f => ({ ...f, expiry_date: e.target.value }))
+                            }}
+                            onBlur={() => {
+                              setManualExpiry(prev => (editForm?.expiry_date ? prev : false))
+                            }}
+                            className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                            type="date"
+                          />
+                        </label>
+                      </div>
+
+                      <label className="mt-3 text-sm text-gray-600">
+                        เงื่อนไขการรับประกัน
+                        <textarea
+                          name="warranty_terms"
+                          value={editForm?.warranty_terms ?? ''}
+                          onChange={e => setEditForm(f => ({ ...f, warranty_terms: e.target.value }))}
+                          className="mt-1 min-h-[96px] w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                          placeholder="กรอกเงื่อนไขการรับประกัน"
+                          required
+                        />
+                      </label>
+
+                      <div className="mt-3 space-y-2">
+                        <label className="text-sm text-gray-600">รูปภาพประกอบ</label>
+                        <ImageUpload
+                          images={warrantyImages}
+                          onUpload={handleImageUpload}
+                          onDelete={handleImageDelete}
+                          maxImages={5}
+                          disabled={warrantySubmitting}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* โหมดสร้างหลายรายการในใบเดียว */}
+                      {createItems.map((it, idx) => (
+                        <div key={idx} className="mb-6 rounded-2xl border border-sky-100 bg-sky-50/40 p-4">
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="text-sm font-semibold text-sky-700">รายการที่ {idx + 1}</div>
+                            {createItems.length > 1 && (
+                              <button type="button" onClick={() => removeItem(idx)} className="text-xs text-rose-600 hover:underline">
+                                ลบรายการ
+                              </button>
+                            )}
+                          </div>
+
                           <label className="text-sm text-gray-600 block">
-                            ระยะเวลา (เดือน)
-                            <select
-                              value={it.duration_months}
-                              onChange={e => patchItem(idx, { duration_months: Number(e.target.value || 12) })}
+                            อีเมลลูกค้า
+                            <input
+                              value={it.customer_email}
+                              onChange={e => patchItem(idx, { customer_email: e.target.value })}
                               className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                            >
-                              {[6, 12, 18, 24].map(month => (
-                                <option key={month} value={month}>{month} เดือน</option>
-                              ))}
-                            </select>
+                              placeholder="กรอกอีเมลลูกค้า"
+                              type="email"
+                              required
+                            />
                           </label>
 
-                          <label className="text-sm text-gray-600 block">
-                            Serial No. (สร้างอัตโนมัติ)
+                          <label className="mt-3 text-sm text-gray-600 block">
+                            ชื่อสินค้า
                             <input
-                              value={it.serial}
-                              onChange={e => patchItem(idx, { serial: e.target.value })}
+                              value={it.product_name}
+                              onChange={e => patchItem(idx, { product_name: e.target.value })}
                               className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                              placeholder="SN001"
+                              placeholder="กรอกชื่อสินค้า"
                               type="text"
                               required
                             />
                           </label>
-                        </div>
 
-                        <div className="mt-3 grid gap-3 md:grid-cols-2">
-                          <label className="text-sm text-gray-600 block">
-                            วันเริ่ม
-                            <input
-                              value={it.purchase_date}
-                              onChange={e => patchItem(idx, { purchase_date: e.target.value })}
-                              className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                              type="date"
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <label className="text-sm text-gray-600 block">
+                              ระยะเวลา (เดือน)
+                              <select
+                                value={it.duration_months}
+                                onChange={e => patchItem(idx, { duration_months: Number(e.target.value || 12) })}
+                                className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                              >
+                                {[6, 12, 18, 24].map(month => (
+                                  <option key={month} value={month}>{month} เดือน</option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label className="text-sm text-gray-600 block">
+                              Serial No. (สร้างอัตโนมัติ)
+                              <input
+                                value={it.serial}
+                                onChange={e => patchItem(idx, { serial: e.target.value })}
+                                className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                                placeholder="SN001"
+                                type="text"
+                                required
+                              />
+                            </label>
+                          </div>
+
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <label className="text-sm text-gray-600 block">
+                              วันเริ่ม
+                              <input
+                                value={it.purchase_date}
+                                onChange={e => patchItem(idx, { purchase_date: e.target.value })}
+                                className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                                type="date"
+                                required
+                              />
+                            </label>
+                            <label className="text-sm text-gray-600 block">
+                              วันหมดอายุ (คำนวณอัตโนมัติ)
+                              <input
+                                value={it.expiry_date}
+                                onChange={e => patchItem(idx, { expiry_date: e.target.value })}
+                                className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                                type="date"
+                              />
+                            </label>
+                          </div>
+
+                          <label className="mt-3 text-sm text-gray-600 block">
+                            เงื่อนไขการรับประกัน
+                            <textarea
+                              value={it.warranty_terms}
+                              onChange={e => patchItem(idx, { warranty_terms: e.target.value })}
+                              className="mt-1 min-h-[96px] w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                              placeholder="กรอกเงื่อนไขการรับประกัน"
                               required
                             />
                           </label>
-                          <label className="text-sm text-gray-600 block">
-                            วันหมดอายุ (คำนวณอัตโนมัติ)
-                            <input
-                              value={it.expiry_date}
-                              onChange={e => patchItem(idx, { expiry_date: e.target.value })}
-                              className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                              type="date"
-                            />
-                          </label>
-                        </div>
 
-                        <label className="mt-3 text-sm text-gray-600 block">
-                          เงื่อนไขการรับประกัน
-                          <textarea
-                            value={it.warranty_terms}
-                            onChange={e => patchItem(idx, { warranty_terms: e.target.value })}
-                            className="mt-1 min-h-[96px] w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                            placeholder="กรอกเงื่อนไขการรับประกัน"
-                            required
-                          />
-                        </label>
-
-                        {/* แนบรูปตอนสร้างเลย */}
-                        <div className="mt-3">
-                          <div className="text-sm text-gray-600">รูปภาพประกอบ (อัปโหลดได้สูงสุด 5 รูป)</div>
-                          <div className="mt-2 rounded-2xl border border-dashed border-gray-300 p-4">
-                            <input
-                              type="file"
-                              accept="image/*"
-                              multiple
-                              onChange={(e) => onPickImages(idx, e.target.files)}
-                            />
-                            {it.images?.length > 0 && (
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                {it.images.map((f, i) => (
-                                  <div key={i} className="h-14 w-14 overflow-hidden rounded-lg border">
-                                    <img
-                                      src={URL.createObjectURL(f)}
-                                      alt={`preview-${i}`}
-                                      className="h-full w-full object-cover"
-                                      onLoad={(e) => URL.revokeObjectURL(e.currentTarget.src)}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            <div className="mt-2 text-xs text-gray-500">รองรับ JPG, PNG, GIF, WebP (สูงสุด 5MB, 5 รูป)</div>
+                          {/* แนบรูปตอนสร้างเลย */}
+                          <div className="mt-3">
+                            <div className="text-sm text-gray-600">รูปภาพประกอบ (อัปโหลดได้สูงสุด 5 รูป)</div>
+                            <div className="mt-2 rounded-2xl border border-dashed border-gray-300 p-4">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={(e) => onPickImages(idx, e.target.files)}
+                              />
+                              {it.images?.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {it.images.map((f, i) => (
+                                    <div key={i} className="h-14 w-14 overflow-hidden rounded-lg border">
+                                      <img
+                                        src={URL.createObjectURL(f)}
+                                        alt={`preview-${i}`}
+                                        className="h-full w-full object-cover"
+                                        onLoad={(e) => URL.revokeObjectURL(e.currentTarget.src)}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="mt-2 text-xs text-gray-500">รองรับ JPG, PNG, GIF, WebP (สูงสุด 5MB, 5 รูป)</div>
+                            </div>
                           </div>
                         </div>
+                      ))}
+
+                      <div className="pb-2">
+                        <button
+                          type="button"
+                          onClick={addItem}
+                          className="rounded-full border border-sky-500 px-4 py-2 text-sm font-medium text-sky-600 hover:bg-sky-50"
+                        >
+                          ➕ เพิ่มสินค้า
+                        </button>
                       </div>
-                    ))}
-
-                    <div className="pb-2">
-                      <button
-                        type="button"
-                        onClick={addItem}
-                        className="rounded-full border border-sky-500 px-4 py-2 text-sm font-medium text-sky-600 hover:bg-sky-50"
-                      >
-                        ➕ เพิ่มสินค้า
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* footer */}
-              <div className="sticky bottom-0 z-10 rounded-b-3xl bg-white px-6 py-4 shadow-[0_-6px_12px_-8px_rgba(0,0,0,0.08)]">
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={warrantySubmitting}
-                    className={`rounded-full bg-sky-600 px-6 py-2 text-sm font-semibold text-white shadow transition ${warrantySubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-500'}`}
-                  >
-                    {warrantySubmitting ? 'กำลังบันทึก...' : modalMode === 'create' ? 'บันทึก' : 'ยืนยัน'}
-                  </button>
+                    </>
+                  )}
                 </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {imagePreview.open && (
-        <ImagePreview
-          images={imagePreview.images}
-          initialIndex={imagePreview.index}
-          onClose={() => setImagePreview({ open: false, images: [], index: 0 })}
-        />
-      )}
-    </div>
+                {/* footer */}
+                <div className="sticky bottom-0 z-10 rounded-b-3xl bg-white px-6 py-4 shadow-[0_-6px_12px_-8px_rgba(0,0,0,0.08)]">
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={warrantySubmitting}
+                      className={`rounded-full bg-sky-600 px-6 py-2 text-sm font-semibold text-white shadow transition ${warrantySubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-500'}`}
+                    >
+                      {warrantySubmitting ? 'กำลังบันทึก...' : modalMode === 'create' ? 'บันทึก' : 'ยืนยัน'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {imagePreview.open && (
+          <ImagePreview
+            images={imagePreview.images}
+            initialIndex={imagePreview.index}
+            onClose={() => setImagePreview({ open: false, images: [], index: 0 })}
+          />
+        )}
+      </div>
+
+      {/* ✅ วาง Footer นอก div ที่มี pb-12 เพื่อไม่ให้ลอย/มีช่องว่างด้านล่าง */}
+      <Footer />
+    </>
   )
 }
