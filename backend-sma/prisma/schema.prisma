@@ -113,6 +113,8 @@ model WarrantyItem {
   warranty   Warranty @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
 
   productName    String
+  // ⬇️ เพิ่มฟิลด์รุ่นสินค้า (Model)
+  model          String?
   serial         String? // อนุโลมข้อมูลเก่า
   purchaseDate   DateTime
   expiryDate     DateTime?

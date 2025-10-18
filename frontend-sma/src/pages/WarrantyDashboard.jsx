@@ -1231,6 +1231,18 @@ export default function WarrantyDashboard() {
                               required
                             />
                           </label>
+                          {/* ✅ เพิ่มช่องรุ่น (Model) ใต้ชื่อสินค้า */}
+                           <label className="mt-3 text-sm text-gray-600">
+                            รุ่น (Model)
+                            <input
+                            name="model"
+                            value={editForm?.model ?? ''}
+                            onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))}
+                            className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                            placeholder="กรอกรุ่นสินค้า"
+                            type="text"
+                        />
+                          </label>
 
                           <div className="mt-3 grid gap-3 md:grid-cols-2">
                             <label className="text-sm text-gray-600 block">

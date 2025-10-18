@@ -235,15 +235,15 @@ export async function downloadWarrantyPdf(req, res) {
       cell(left + colL, y, colR, rowH3, "โทรศัพท์", "Tel.", base.customerTel);
       y += rowH3;
 
-      // แถว 4: Address เต็มแถว
+      // แถว 4: เปลี่ยนจาก Address → เงื่อนไขการรับประกัน (Warranty Terms)
       doc.rect(left, y, tableW, rowH4).stroke();
-      doc.font("THAI").fontSize(10).fillColor("#000").text("ที่อยู่", left + mm(3.5), y + mm(3.5));
-      doc.font("THAI").fontSize(9).fillColor("#555").text("Address", left + mm(3.5), y + mm(8.5));
+      doc.font("THAI").fontSize(10).fillColor("#000").text("เงื่อนไขการรับประกัน", left + mm(3.5), y + mm(3.5));
+      doc.font("THAI").fontSize(9).fillColor("#555").text("Warranty Terms", left + mm(3.5), y + mm(8.5));
       doc
         .font("THAI")
         .fontSize(11)
         .fillColor("#000")
-        .text(T(base.customerAddress), left + mm(3.5), y + mm(14), {
+        .text(T(item.coverageNote), left + mm(3.5), y + mm(14), {
           width: tableW - mm(7),
         });
       y += rowH4;
@@ -253,6 +253,10 @@ export async function downloadWarrantyPdf(req, res) {
       const purchaseTxt = purchaseDate
         ? new Date(purchaseDate).toLocaleDateString("th-TH")
         : "-";
+      const expiryTxt = item.expiryDate
+        ? new Date(item.expiryDate).toLocaleDateString("th-TH")
+        : "-";
+
       cell(
         left,
         y,
@@ -262,7 +266,17 @@ export async function downloadWarrantyPdf(req, res) {
         "Dealer' Name",
         base.dealerName
       );
-      cell(left + colL, y, colR, rowH5, "วันที่ซื้อ", "Purchase Date", purchaseTxt);
+
+      // แสดงทั้งวันที่ซื้อและวันหมดอายุในช่องเดียว (ขวา)
+      cell(
+        left + colL,
+        y,
+        colR,
+        rowH5,
+        "วันที่ซื้อ / วันหมดอายุ",
+        "Purchase / Expiry",
+        `${purchaseTxt}\nหมดอายุ: ${expiryTxt}`
+      );
       y += rowH5;
 
       // หมายเหตุบรรทัดล่าง
@@ -302,7 +316,6 @@ export async function downloadWarrantyPdf(req, res) {
       cardNo: header.code || header.id,
       customerName: header.customerName || "-",
       customerTel: header.customerPhone || "-",
-      customerAddress: "-", // ถ้ามี address ลูกค้า ค่อย map มาแทน
       dealerName: profile?.storeName || "-",
       purchaseDate: header.createdAt,
       footerNote: "โปรดนำใบรับประกันฉบับนี้มาแสดงเป็นหลักฐานทุกครั้งเมื่อใช้บริการ",
@@ -317,11 +330,20 @@ export async function downloadWarrantyPdf(req, res) {
     const items = (header.items || []).length
       ? header.items.map((it) => ({
           productName: it.productName || "-",
-          model: "-", // ถ้ามี field รุ่นจริง ค่อยเปลี่ยนมาใช้
+          model: it.model || "-",
           serialNumber: it.serial || "-",
           purchaseDate: it.purchaseDate || header.createdAt,
+          expiryDate: it.expiryDate || null,
+          coverageNote: it.coverageNote || null,
         }))
-      : [{ productName: "-", model: "-", serialNumber: "-", purchaseDate: header.createdAt }];
+      : [{
+          productName: "-",
+          model: "-",
+          serialNumber: "-",
+          purchaseDate: header.createdAt,
+          expiryDate: null,
+          coverageNote: null,
+        }];
 
     // วาดหน้า (รายการละ 1 หน้า)
     for (const it of items) {

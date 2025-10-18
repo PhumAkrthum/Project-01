@@ -119,6 +119,8 @@ function mapWarrantyHeaderForResponse(header, notifyDays) {
       return {
         id: w.id,
         productName: w.productName,
+        // ⬇️ เพิ่ม model ลงใน response
+        model: w.model ?? null,
         serial: w.serial,
         purchaseDate: w.purchaseDate
           ? new Date(w.purchaseDate).toISOString().slice(0, 10)
@@ -357,6 +359,8 @@ export async function createWarranty(req, res) {
 
           return {
             productName: String(it.product_name || it.productName || "").trim(),
+            // ⬇️ เพิ่ม model ในการสร้าง
+            model: (it.model || it.product_model || "").trim() || null,
             serial,
             purchaseDate: purchase,
             expiryDate: expiry,
@@ -423,6 +427,8 @@ export async function createWarranty(req, res) {
               items: {
                 create: [{
                   productName: String(body.product_name || body.productName || "").trim(),
+                  // ⬇️ เพิ่ม model ใน single-item payload
+                  model: String(body.model || body.product_model || "").trim() || null,
                   serial: serialOne,
                   purchaseDate: purchase,
                   expiryDate: expiry,

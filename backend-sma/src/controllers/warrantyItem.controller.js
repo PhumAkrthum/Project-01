@@ -1,3 +1,4 @@
+// backend-sma/src/controllers/warrantyItem.controller.js
 import { prisma } from '../db/prisma.js';
 import fs from 'fs';
 import path from 'path';
@@ -132,6 +133,16 @@ export async function updateItem(req, res) {
     const productName =
       b.productName !== undefined ? String(b.productName).trim() : item.productName;
 
+    // ⭐ รองรับฟิลด์ "รุ่น" (model)
+    //   - ฟอร์มใหม่จะส่ง b.model
+    //   - เผื่ออนาคต/เดิมบางส่วนอาจส่ง productModel
+    const model =
+      b.model !== undefined
+        ? (String(b.model).trim() || null)
+        : (b.productModel !== undefined
+            ? (String(b.productModel).trim() || null)
+            : (item.model ?? null));
+
     const serial =
       b.serial !== undefined
         ? (String(b.serial).trim() || null)
@@ -184,6 +195,7 @@ export async function updateItem(req, res) {
 
     const data = {
       productName,
+      model, // ⭐ บันทึกฟิลด์รุ่น
       serial,
       purchaseDate,
       expiryDate,
