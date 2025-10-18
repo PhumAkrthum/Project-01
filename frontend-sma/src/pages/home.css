@@ -1,45 +1,45 @@
-/* ===== Wave motion ===== */
+/* ===== Wave motion (พื้นน้ำ) ===== */
 .wave-smooth {
   animation: gentleWave 14s ease-in-out infinite alternate;
   filter: blur(0.3px);
 }
 
 @keyframes gentleWave {
-  0% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(5px);
-  }
-  100% {
-    transform: translateY(0px);
-  }
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(5px); }
+  100% { transform: translateY(0px); }
 }
 
-/* ===== Icon float ===== */
+/* ===== Icon float (ลอยเบา ๆ) ===== */
 .animate-float {
   animation: floatUpDown 4.5s ease-in-out infinite;
 }
 
 @keyframes floatUpDown {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-7px);
-  }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
 }
 
-/* ===== Bubble Motion ===== */
+/* ===== Bubble Motion (ฟองอากาศกลมแน่นอน) ===== */
 .bubble {
   position: absolute;
   bottom: -80px;
-  background: radial-gradient(circle at 30% 30%, #dff2ff, #a6d6ff);
+
+  /* ✅ ฟองอากาศกลมแน่นอน */
+  aspect-ratio: 1 / 1;
+  width: 40px;
+  height: auto;
   border-radius: 50%;
-  opacity: 0.6;
+
+  /* ✅ สีและแสงนุ่ม */
+  background: radial-gradient(circle at 30% 30%, #e3f4ff, #9ed0ff 70%);
+  box-shadow: 0 0 10px rgba(150, 200, 255, 0.3);
+  opacity: 0.7;
+
   animation: bubbleFloat 12s linear infinite;
 }
 
+/* ✅ ไม่มี rotate — จะไม่รีอีกเลย */
 @keyframes bubbleFloat {
   0% {
     transform: translateY(0) scale(1);
@@ -49,7 +49,7 @@
     opacity: 0.9;
   }
   100% {
-    transform: translateY(-900px) scale(1.4);
+    transform: translateY(-900px) scale(1.2);
     opacity: 0;
   }
 }

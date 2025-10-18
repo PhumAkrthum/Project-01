@@ -7,6 +7,8 @@ import ImageUpload from '../components/ImageUpload'
 import ImagePreview from '../components/ImagePreview'
 import AppLogo from '../components/AppLogo'
 import Footer from '../components/Footer'
+import { Link } from 'react-router-dom'
+
 
 /* =======================
  * UI helpers & constants
@@ -624,15 +626,23 @@ export default function WarrantyDashboard() {
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
             {/* Left: Logo + title */}
             <div className="flex items-center gap-3">
-              <div className="relative grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-sky-50 to-white ring-1 ring-black/5 shadow-sm">
+              {/* 🔹 เปลี่ยนจาก <div> เป็น <Link> */}
+              <Link
+                to="/"
+                className="relative grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-sky-50 to-white ring-1 ring-black/5 shadow-sm hover:scale-105 hover:ring-sky-200 transition"
+                title="กลับหน้าแรก"
+              >
                 <AppLogo className="h-7 w-7" />
                 <div className="absolute -inset-px rounded-2xl pointer-events-none [mask-image:radial-gradient(18px_18px_at_16px_16px,white,transparent)]"></div>
-              </div>
+              </Link>
               <div>
                 <div className="text-lg font-semibold text-slate-900">Warranty</div>
-                <div className="text-xs text-slate-500">จัดการการรับประกันของคุณได้ในที่เดียว</div>
+                <div className="text-xs text-slate-500">
+                  จัดการการรับประกันของคุณได้ในที่เดียว
+                </div>
               </div>
             </div>
+
 
             {/* Right: 🔔 + Profile */}
             <div className="flex items-center gap-3" ref={profileMenuRef}>
