@@ -6,7 +6,7 @@ import { useAuth } from '../store/auth'
 import ImageUpload from '../components/ImageUpload'
 import ImagePreview from '../components/ImagePreview'
 import AppLogo from '../components/AppLogo'
-import Footer from '../components/Footer' // ✅ เพิ่มบรรทัดนี้
+import Footer from '../components/Footer' // ✅
 
 const defaultFilters = [
   { value: 'all', label: 'ทั้งหมด' },
@@ -155,12 +155,16 @@ export default function WarrantyDashboard() {
 
   const [imagePreview, setImagePreview] = useState({ open: false, images: [], index: 0 })
 
+  // ✅ สำหรับแก้ไขอีเมลลูกค้าระดับใบ
+  const [editHeaderEmail, setEditHeaderEmail] = useState('')
+
   const profileAvatarSrc = profileImage.preview || storeProfile.avatarUrl || ''
 
   /* ---------- สร้างหลายสินค้าในใบเดียว + auto expiry ---------- */
   const makeItem = (seedSN = null) => ({
     customer_email: '',
     product_name: '',
+    model: '', // ✅ เพิ่มฟิลด์รุ่นในโหมดสร้าง
     duration_months: 12,
     serial: seedSN || nextSerialFromList(warranties),
     purchase_date: '',
@@ -171,8 +175,16 @@ export default function WarrantyDashboard() {
   })
   const [createItems, setCreateItems] = useState([makeItem()])
 
-  const addItem = () => setCreateItems(prev => [...prev, makeItem()])
+  // ✅ เพิ่มรายการใหม่พร้อมดึงอีเมลจาก "รายการที่ 1" ให้เลย
+  const addItem = () =>
+    setCreateItems(prev => {
+      const emailSeed = prev?.[0]?.customer_email || ''
+      return [...prev, { ...makeItem(), customer_email: emailSeed }]
+    })
+
   const removeItem = (idx) => setCreateItems(prev => prev.filter((_, i) => i !== idx))
+
+  // ✅ ถ้าแก้อีเมลในรายการแรก ให้เติมไปยังรายการอื่น "เฉพาะตัวที่ยังว่าง"
   const patchItem = (idx, patch) => {
     setCreateItems(prev => {
       const next = prev.map((it, i) => (i === idx ? { ...it, ...patch } : it))
@@ -181,9 +193,16 @@ export default function WarrantyDashboard() {
         const m = Number(t.duration_months || 0) || 0
         next[idx] = { ...t, expiry_date: m > 0 ? addMonthsKeepDay(t.purchase_date, m) : '' }
       }
+      if ('customer_email' in patch && idx === 0) {
+        const email = String(patch.customer_email || '').trim()
+        for (let i = 1; i < next.length; i++) {
+          if (!next[i].customer_email) next[i] = { ...next[i], customer_email: email }
+        }
+      }
       return next
     })
   }
+
   const onPickImages = (idx, files) => {
     const arr = Array.from(files || []).slice(0, 5)
     patchItem(idx, { images: arr })
@@ -224,12 +243,9 @@ export default function WarrantyDashboard() {
           // “ทั้งหมด” + คำค้นตรงกับตัวใบ → แสดงสินค้าทั้งใบ
           if (headerMatch && activeFilter === 'all') return true
 
-          // ตรวจคำค้นระดับ "สินค้า"
-          const itemHay = [
-            it.productName, it.serial, it.coverageNote, it.note
-          ].map(x => String(x || '').toLowerCase())
-
-          const passSearch = term ? itemHay.some(s => s.includes(term)) : true
+          // ✅ ค้นหาที่ระดับ "สินค้า" จากชื่อสินค้าเท่านั้น
+          const nameText = String(it.productName || '').toLowerCase()
+          const passSearch = term ? nameText.includes(term) : true
 
           // ให้แท็บอื่นๆ โชว์รายการในใบนั้นที่ผ่านสถานะ แม้คำค้นจะตรงแค่ตัวใบ
           return passSearch || headerMatch
@@ -365,9 +381,11 @@ export default function WarrantyDashboard() {
       setCreateItems([makeItem()])
       setEditForm(null)
       setManualExpiry(false)
+      setEditHeaderEmail('')
     } else if (mode === 'edit' && item) {
       setEditForm({
         product_name: item.productName || '',
+        model: item.model || '', // ✅ ผูก model ตอนแก้ไข
         duration_months: item.durationMonths ??
           Math.max(1, Math.round((item.durationDays || 30) / 30)),
         serial: item.serial || '',
@@ -376,6 +394,7 @@ export default function WarrantyDashboard() {
         warranty_terms: item.coverageNote || '',
         note: item.note || '',
       })
+      setEditHeaderEmail(item?._headerEmail || '') // ✅ อีเมลลูกค้าระดับใบ
       setManualExpiry(false)
     }
 
@@ -460,6 +479,7 @@ export default function WarrantyDashboard() {
 
         const fd = new FormData()
         fd.append('productName', String(editForm?.product_name || '').trim())
+        fd.append('model', String(editForm?.model || '').trim()) // ✅ ส่ง model ตอนแก้ไข
         fd.append('serial', String(editForm?.serial || '').trim())
         fd.append('purchaseDate', purchase)
         if (months !== undefined) fd.append('durationMonths', String(months))
@@ -472,6 +492,17 @@ export default function WarrantyDashboard() {
         await api.patch(`/warranty-items/${selectedItem.id}`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
         })
+
+        // ✅ ถ้าอีเมลลูกค้า (ระดับใบ) เปลี่ยน ให้แพตช์ header
+        if (selectedItem?._headerId && (editHeaderEmail.trim() !== (selectedItem?._headerEmail || ''))) {
+          try {
+            await api.patch(`/warranties/${selectedItem._headerId}`, {
+              customerEmail: editHeaderEmail.trim(),
+            })
+          } catch (e) {
+            console.warn('Patch warranty header email failed:', e?.response?.data || e?.message)
+          }
+        }
 
         await fetchDashboard()
         setWarrantyModalOpen(false)
@@ -487,6 +518,7 @@ export default function WarrantyDashboard() {
           return {
             customer_email: (it.customer_email || '').trim(),
             product_name: (it.product_name || '').trim(),
+            model: (it.model || '').trim() || null, // ✅ ส่งรุ่นไป backend
             purchase_date: (it.purchase_date || '').trim(),
             serial: (it.serial || '').trim(),
             warranty_terms: (it.warranty_terms || '').trim(),
@@ -577,25 +609,30 @@ export default function WarrantyDashboard() {
 
   return (
     <>
-      <div className="min-h-screen bg-sky-50/80 pb-12">
-        <header className="border-b border-sky-100 bg-white/90 py-4 backdrop-blur">
+      {/* 🟦 BG: ปรับให้เหมือนโค้ด1 */}
+      <div className="min-h-screen bg-gradient-to-b from-sky-50 to-sky-100/60 pb-16">
+        {/* 🟦 Header: ใช้สไตล์และโลโก้มุมซ้ายบนแบบโค้ด1 */}
+        <header className="sticky top-0 z-30 border-b border-sky-100 bg-white/80 py-3 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
+            {/* โลโก้มุมซ้ายบนจากโค้ด1 */}
             <div className="flex items-center gap-3">
-              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sky-50 ring-1 ring-black/5">
+              <div className="relative grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-sky-50 to-white ring-1 ring-black/5 shadow-sm">
                 <AppLogo className="h-7 w-7" />
+                <div className="absolute -inset-px rounded-2xl pointer-events-none [mask-image:radial-gradient(18px_18px_at_16px_16px,white,transparent)]"></div>
               </div>
               <div>
-                <div className="text-lg font-semibold text-gray-900">Warranty</div>
-                <div className="text-sm text-gray-500">จัดการการรับประกันของคุณได้ในที่เดียว</div>
+                <div className="text-lg font-semibold text-slate-900">Warranty</div>
+                <div className="text-xs text-slate-500">จัดการการรับประกันของคุณได้ในที่เดียว</div>
               </div>
             </div>
+
             <div className="flex items-center gap-3" ref={profileMenuRef}>
               <IconButton icon="🔔" label="การแจ้งเตือน" />
               <IconButton icon="📅" label="กิจกรรม" />
               <button
                 type="button"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
-                className="flex items-center gap-3 rounded-full bg-white px-3 py-2 shadow ring-1 ring-black/10 hover:bg-gray-50"
+                className="flex items-center gap-3 rounded-full bg-white px-3 py-2 shadow ring-1 ring-black/10 hover:-translate-y-0.5 hover:bg-slate-50 transition"
               >
                 {profileAvatarSrc ? (
                   <img src={profileAvatarSrc} alt="Store profile" className="h-10 w-10 rounded-full object-cover" />
@@ -603,28 +640,28 @@ export default function WarrantyDashboard() {
                   <div className="grid h-10 w-10 place-items-center rounded-full bg-amber-300 text-xl">🏪</div>
                 )}
                 <div className="hidden text-left text-sm md:block">
-                  <div className="font-medium text-gray-900">{storeDisplayName}</div>
-                  <div className="text-xs text-gray-500">{storeEmail}</div>
+                  <div className="font-medium text-slate-900">{storeDisplayName}</div>
+                  <div className="text-xs text-slate-500">{storeEmail}</div>
                 </div>
-                <span className="hidden text-gray-400 md:inline">▾</span>
+                <span className="hidden text-slate-400 md:inline">▾</span>
               </button>
               {isProfileMenuOpen && (
-                <div className="absolute right-4 top-16 w-60 rounded-2xl bg-white p-4 text-sm shadow-xl ring-1 ring-black/5">
+                <div className="absolute right-4 top-14 w-64 rounded-2xl bg-white p-4 text-sm shadow-xl ring-1 ring-black/5">
                   <div className="mb-4 flex items-center gap-3">
                     {profileAvatarSrc ? (
                       <img src={profileAvatarSrc} alt="Store profile" className="h-12 w-12 rounded-full object-cover" />
                     ) : (
-                      <div className="grid h-12 w-12 place-items-center rounded-full bg-amber-200 text-2xl">🏪</div>
+                      <div className="grid h-12 w-12 place-items-center rounded-full bg-sky-200 text-2xl">🏪</div>
                     )}
-                    <div>
-                      <div className="font-medium text-gray-900">{storeDisplayName}</div>
-                      <div className="text-xs text-gray-500">{storeEmail}</div>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-slate-900">{storeDisplayName}</div>
+                      <div className="truncate text-xs text-slate-500">{storeEmail}</div>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={openProfileModal}
-                    className="flex w-full items-center justify-between rounded-xl bg-amber-50 px-3 py-2 text-gray-700 hover:bg-amber-100"
+                    className="flex w-full items-center justify-between rounded-xl bg-sky-50 px-3 py-2 text-slate-700 hover:bg-sky-100"
                   >
                     <span>แก้ไขโปรไฟล์</span>
                     <span aria-hidden>✏️</span>
@@ -632,7 +669,7 @@ export default function WarrantyDashboard() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="mt-2 flex w-full items-center justify-between rounded-xl px-3 py-2 text-gray-500 hover:bg-gray-50"
+                    className="mt-2 flex w-full items-center justify-between rounded-xl px-3 py-2 text-slate-500 hover:bg-slate-50"
                   >
                     <span>ออกจากระบบ</span>
                     <span aria-hidden>↪️</span>
@@ -644,21 +681,22 @@ export default function WarrantyDashboard() {
         </header>
 
         <main className="mx-auto mt-8 max-w-6xl px-4">
+          {/* 🟦 กล่องแจ้ง error: ใช้โทนฟ้าแบบโค้ด1 */}
           {dashboardError && (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
               <span>{dashboardError}</span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setDashboardError('')}
-                  className="rounded-full bg-white px-3 py-1 text-xs font-medium text-amber-600 shadow hover:bg-amber-100"
+                  className="rounded-full bg-white px-3 py-1 text-xs font-medium text-sky-600 shadow hover:bg-sky-100"
                 >
                   ปิด
                 </button>
                 <button
                   type="button"
                   onClick={fetchDashboard}
-                  className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white shadow hover:bg-amber-400"
+                  className="rounded-full bg-sky-600 px-3 py-1 text-xs font-semibold text-white shadow hover:bg-sky-500"
                 >
                   ลองอีกครั้ง
                 </button>
@@ -668,12 +706,12 @@ export default function WarrantyDashboard() {
 
           <div className="rounded-3xl border border-sky-100 bg-gradient-to-b from-white to-sky-50 p-6 shadow-xl">
             {dashboardLoading ? (
-              <div className="grid min-h-[320px] place-items-center text-sm text-gray-500">กำลังโหลดข้อมูล...</div>
+              <div className="grid min-h-[320px] place-items-center text-sm text-slate-500">กำลังโหลดข้อมูล...</div>
             ) : !storeIdResolved ? (
-              <div className="grid min-h-[320px] place-items-center text-center text-sm text-gray-500">
+              <div className="grid min-h-[320px] place-items-center text-center text-sm text-slate-500">
                 <div>
-                  <div className="text-base font-medium text-gray-700">หน้านี้สำหรับบัญชีร้านค้าเท่านั้น</div>
-                  <p className="mt-1 text-xs text-gray-500">กรุณาเข้าสู่ระบบด้วยบัญชีร้านค้าเพื่อเข้าถึงแดชบอร์ด</p>
+                  <div className="text-base font-medium text-slate-700">หน้านี้สำหรับบัญชีร้านค้าเท่านั้น</div>
+                  <p className="mt-1 text-xs text-slate-500">กรุณาเข้าสู่ระบบด้วยบัญชีร้านค้าเพื่อเข้าถึงแดชบอร์ด</p>
                 </div>
               </div>
             ) : (
@@ -685,7 +723,7 @@ export default function WarrantyDashboard() {
                     <button
                       type="button"
                       onClick={() => openWarrantyModal('create')}
-                      className="rounded-full bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-sky-500"
+                      className="rounded-full bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow hover:-translate-y-0.5 hover:bg-sky-500 transition"
                     >
                       สร้างใบรับประกัน
                     </button>
@@ -694,7 +732,7 @@ export default function WarrantyDashboard() {
 
                 <div className="mb-6 flex flex-wrap items-center gap-3">
                   <div className="flex flex-1 items-center rounded-2xl bg-white px-4 py-2 shadow ring-1 ring-black/5">
-                    <span className="text-gray-400">🔍</span>
+                    <span className="text-slate-400">🔍</span>
                     <input
                       value={searchTerm}
                       onChange={(event) => setSearchTerm(event.target.value)}
@@ -702,26 +740,35 @@ export default function WarrantyDashboard() {
                       placeholder="ค้นหาด้วยรหัสใบรับประกัน, ชื่อลูกค้า, อีเมลลูกค้า, ชื่อสินค้า"
                     />
                   </div>
+
+                  {/* 🟦 ปุ่มกรอง: ใช้โทนสีและ logic เดียวกับโค้ด1 */}
                   <div className="flex flex-wrap gap-2">
-                    {filters.map((filter) => {
-                      const isActiveFilter = activeFilter === filter.value
-                      const activeClass = isActiveFilter
-                        ? filter.value === 'active'
-                          ? 'bg-emerald-500 text-white'
-                          : filter.value === 'nearing_expiration'
-                          ? 'bg-amber-500 text-white'
-                          : filter.value === 'expired'
-                          ? 'bg-rose-500 text-white'
-                          : 'bg-gray-900 text-white'
-                        : 'bg-white text-gray-500 hover:bg-gray-50'
+                    {filters.map((f) => {
+                      const isActive = activeFilter === f.value
+                      const colors = isActive
+                        ? f.value === 'active'
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : f.value === 'nearing_expiration'
+                          ? 'bg-amber-500 text-white border-amber-500'
+                          : f.value === 'expired'
+                          ? 'bg-rose-600 text-white border-rose-600'
+                          : 'bg-slate-900 text-white border-slate-900'
+                        : f.value === 'active'
+                        ? 'bg-white text-emerald-700 border-emerald-400'
+                        : f.value === 'nearing_expiration'
+                        ? 'bg-white text-amber-700 border-amber-300'
+                        : f.value === 'expired'
+                        ? 'bg-white text-rose-700 border-rose-300'
+                        : 'bg-white text-slate-800 border-slate-300'
+
                       return (
                         <button
-                          key={filter.value}
+                          key={f.value}
                           type="button"
-                          onClick={() => setActiveFilter(filter.value)}
-                          className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm transition ${activeClass}`}
+                          onClick={() => setActiveFilter(f.value)}
+                          className={`px-4 h-10 rounded-full text-sm border font-medium hover:-translate-y-0.5 transition ${colors}`}
                         >
-                          {filter.label}
+                          {f.label}
                         </button>
                       )
                     })}
@@ -731,22 +778,23 @@ export default function WarrantyDashboard() {
                 {/* รายการใบรับประกัน (แบ่งหน้า 5 ใบ/หน้า) */}
                 <div className="mb-8 grid gap-4">
                   {paginatedHeaders.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500">
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
                       ยังไม่มีใบรับประกัน
                     </div>
                   ) : (
                     paginatedHeaders.map(header => {
                       const expanded = !!expandedByHeader[header.id]
                       return (
-                        <div key={header.id} className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow">
+                        // 🟦 การ์ดใบรับประกัน: โทนสเลทแบบโค้ด1
+                        <div key={header.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-md transition hover:shadow-lg">
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1">
-                              <div className="text-lg font-semibold text-gray-900">Warranty Card</div>
-                              <div className="mt-2 grid gap-1 text-sm text-gray-700 md:grid-cols-2">
-                                <div>รหัสใบรับประกัน: <span className="font-medium text-gray-900">{header.code || '-'}</span></div>
-                                <div>ลูกค้า: <span className="font-medium text-gray-900">{header.customerName || '-'}</span></div>
-                                <div>เบอร์โทรศัพท์: <span className="font-medium text-gray-900">{header.customerPhone || '-'}</span></div>
-                                <div>อีเมลลูกค้า: <span className="font-medium text-gray-900">{header.customerEmail || '-'}</span></div>
+                              <div className="text-lg font-semibold text-slate-900">Warranty Card</div>
+                              <div className="mt-2 grid gap-1 text-sm text-slate-700 md:grid-cols-2">
+                                <div>รหัสใบรับประกัน: <span className="font-medium text-slate-900">{header.code || '-'}</span></div>
+                                <div>ลูกค้า: <span className="font-medium text-slate-900">{header.customerName || '-'}</span></div>
+                                <div>เบอร์โทรศัพท์: <span className="font-medium text-slate-900">{header.customerPhone || '-'}</span></div>
+                                <div>อีเมลลูกค้า: <span className="font-medium text-slate-900">{header.customerEmail || '-'}</span></div>
                               </div>
                             </div>
 
@@ -755,14 +803,16 @@ export default function WarrantyDashboard() {
                                 type="button"
                                 onClick={() => header && handleDownloadPdf(header.id)}
                                 disabled={!header || downloadingPdfId === header.id}
-                                className={`h-10 min-w-[96px] rounded-full bg-sky-500 px-5 text-sm font-medium text-white shadow transition ${!header || downloadingPdfId === header.id ? 'cursor-not-allowed opacity-70' : 'hover:bg-sky-400'}`}
+                                className={`h-10 min-w-[96px] rounded-full bg-sky-600 px-5 text-sm font-medium text-white shadow transition ${
+                                  !header || downloadingPdfId === header.id ? 'cursor-not-allowed opacity-70' : 'hover:-translate-y-0.5 hover:bg-sky-500'
+                                }`}
                               >
                                 {downloadingPdfId === header.id ? 'กำลังดาวน์โหลด…' : 'PDF'}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setExpandedByHeader(prev => ({ ...prev, [header.id]: !prev[header.id] }))}
-                                className="rounded-full border border-amber-300 px-4 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-100"
+                                className="rounded-full border border-sky-300 px-4 py-2 text-xs font-semibold text-sky-700 bg-white hover:-translate-y-0.5 hover:bg-sky-50 transition"
                               >
                                 {expanded ? 'ซ่อนรายละเอียด' : 'รายละเอียดเพิ่มเติม'}
                               </button>
@@ -770,7 +820,7 @@ export default function WarrantyDashboard() {
                           </div>
 
                           {/* สรุปรายการในใบ */}
-                          <p className="mt-4 rounded-xl bg-white/60 p-3 text-xs text-amber-700">
+                          <p className="mt-4 rounded-xl bg-white/70 p-3 text-xs text-slate-700">
                             ใบนี้มีทั้งหมด {header._filteredItems?.length ?? header.items?.length ?? 0} รายการ
                           </p>
 
@@ -781,21 +831,22 @@ export default function WarrantyDashboard() {
                                 <div key={it.id} className="flex flex-col justify-between gap-6 rounded-2xl bg-white p-4 shadow ring-1 ring-black/5 md:flex-row">
                                   <div className="flex-1 space-y-3">
                                     <div className="flex flex-wrap items-center gap-3">
-                                      <div className="text-base font-semibold text-gray-900">{it.productName}</div>
+                                      <div className="text-base font-semibold text-slate-900">{it.productName}</div>
                                       <StatusBadge label={it.statusTag} className={it.statusColor} />
-                                      <span className="text-xs text-gray-400">#{it.id}</span>
+                                      <span className="text-xs text-slate-400">#{it.id}</span>
                                     </div>
-                                    <div className="grid gap-2 text-sm text-gray-600 md:grid-cols-2">
-                                      <div>Serial No.: <span className="font-medium text-gray-900">{it.serial || '-'}</span></div>
-                                      <div>วันที่ซื้อ: <span className="font-medium text-gray-900">{it.purchaseDate || '-'}</span></div>
-                                      <div>วันหมดอายุ: <span className="font-medium text-gray-900">{it.expiryDate || '-'}</span></div>
-                                      <div>จำนวนวันคงเหลือ: <span className="font-medium text-gray-900">{it.daysLeft ?? 0} วัน</span></div>
+                                    <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
+                                      <div>Serial No.: <span className="font-medium text-slate-900">{it.serial || '-'}</span></div>
+                                      <div>วันที่ซื้อ: <span className="font-medium text-slate-900">{it.purchaseDate || '-'}</span></div>
+                                      <div>วันหมดอายุ: <span className="font-medium text-slate-900">{it.expiryDate || '-'}</span></div>
+                                      <div>จำนวนวันคงเหลือ: <span className="font-medium text-slate-900">{it.daysLeft ?? 0} วัน</span></div>
+                                      <div>รุ่น: <span className="font-medium text-slate-900">{it.model || '-'}</span></div>
                                     </div>
                                     <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-800">{it.coverageNote || '-'}</p>
 
                                     {it.images && it.images.length > 0 && (
                                       <div className="space-y-2">
-                                        <div className="text-sm font-medium text-gray-700">รูปภาพประกอบ</div>
+                                        <div className="text-sm font-medium text-slate-700">รูปภาพประกอบ</div>
                                         <div className="flex gap-2 overflow-x-auto">
                                           {it.images.map((image, index) => (
                                             <div key={image.id || index} className="group relative flex-shrink-0 cursor-pointer">
@@ -817,7 +868,8 @@ export default function WarrantyDashboard() {
                                   </div>
 
                                   <div className="grid place-items-center gap-4">
-                                    <div className="relative h-32 w-40 overflow-hidden rounded-2xl border border-gray-300 bg-gray-50">
+                                    {/* 🟦 โทนกรอบรูปด้านขวาเป็น slate เหมือนโค้ด1 */}
+                                    <div className="relative h-32 w-40 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                                       {it.images && it.images.length > 0 ? (
                                         <div
                                           className="group relative h-full w-full cursor-pointer"
@@ -838,7 +890,7 @@ export default function WarrantyDashboard() {
                                           </div>
                                         </div>
                                       ) : (
-                                        <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
+                                        <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
                                           <div className="text-center">
                                             <div className="mb-1 text-2xl">📷</div>
                                             <div>ไม่มีรูปภาพ</div>
@@ -849,8 +901,8 @@ export default function WarrantyDashboard() {
 
                                     <button
                                       type="button"
-                                      onClick={() => openWarrantyModal('edit', it)}
-                                      className="flex items-center gap-2 rounded-full border border-sky-500 px-4 py-2 text-sm font-medium text-sky-600 hover:bg-sky-50"
+                                      onClick={() => openWarrantyModal('edit', { ...it, _headerId: header.id, _headerEmail: header.customerEmail })} // ✅ ส่งข้อมูลใบมาด้วย
+                                      className="flex items-center gap-2 rounded-full border border-sky-500 px-4 py-2 text-sm font-medium text-sky-700 bg-white hover:-translate-y-0.5 hover:bg-sky-50 transition"
                                     >
                                       <span>แก้ไข</span>
                                       <span aria-hidden>✏️</span>
@@ -866,12 +918,12 @@ export default function WarrantyDashboard() {
                   )}
                 </div>
 
-                {/* ✅ Pagination footer */}
+                {/* ✅ Pagination footer — ใช้โทนสเลทแบบโค้ด1 */}
                 {filteredHeaders.length > 0 && (
                   <div className="mt-6 flex flex-col items-center gap-3 md:flex-row md:justify-between">
-                    <div className="text-xs text-gray-500">
-                      หน้า <span className="font-medium text-gray-900">{currentPage}</span> จาก{' '}
-                      <span className="font-medium text-gray-900">{totalPages}</span>
+                    <div className="text-xs text-slate-500">
+                      หน้า <span className="font-medium text-slate-900">{currentPage}</span> จาก{' '}
+                      <span className="font-medium text-slate-900">{totalPages}</span>
                       {' • '}
                       แสดง {Math.min((currentPage - 1) * PAGE_SIZE + 1, filteredHeaders.length)}–
                       {Math.min(currentPage * PAGE_SIZE, filteredHeaders.length)} จาก {filteredHeaders.length} ใบ
@@ -882,8 +934,8 @@ export default function WarrantyDashboard() {
                         disabled={currentPage === 1}
                         className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
                           currentPage === 1
-                            ? 'cursor-not-allowed bg-white text-gray-300 ring-1 ring-black/10'
-                            : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
+                            ? 'cursor-not-allowed bg-white text-slate-300 ring-1 ring-black/10'
+                            : 'bg-white text-slate-700 ring-1 ring-black/10 hover:-translate-y-0.5 hover:bg-slate-50 transition'
                         }`}
                       >
                         ก่อนหน้า
@@ -893,7 +945,7 @@ export default function WarrantyDashboard() {
                           key={n}
                           onClick={() => setPage(n)}
                           className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
-                            n === currentPage ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
+                            n === currentPage ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-black/10 hover:-translate-y-0.5 hover:bg-slate-50 transition'
                           }`}
                         >
                           {n}
@@ -904,8 +956,8 @@ export default function WarrantyDashboard() {
                         disabled={currentPage === totalPages}
                         className={`rounded-full px-3 py-2 text-xs font-medium shadow-sm ${
                           currentPage === totalPages
-                            ? 'cursor-not-allowed bg-white text-gray-300 ring-1 ring-black/10'
-                            : 'bg-white text-gray-700 ring-1 ring-black/10 hover:bg-gray-50'
+                            ? 'cursor-not-allowed bg-white text-slate-300 ring-1 ring-black/10'
+                            : 'bg-white text-slate-700 ring-1 ring-black/10 hover:-translate-y-0.5 hover:bg-slate-50 transition'
                         }`}
                       >
                         ถัดไป
@@ -1084,8 +1136,23 @@ export default function WarrantyDashboard() {
 
                   {modalMode === 'edit' ? (
                     <>
+                      {/* ✅ แก้ไขอีเมลลูกค้า (ระดับใบ) */}
+                      <label className="mb-3 block text-sm text-gray-100">
+                        {/* spacer on dark header */}
+                      </label>
+                      <label className="text-sm text-gray-600 block">
+                        อีเมลลูกค้า (แก้ไขระดับใบ)
+                        <input
+                          value={editHeaderEmail}
+                          onChange={e => setEditHeaderEmail(e.target.value)}
+                          className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                          placeholder="example@email.com"
+                          type="email"
+                        />
+                      </label>
+
                       {/* ฟอร์มแก้ไขแบบ controlled + auto-expiry */}
-                      <label className="text-sm text-gray-600">
+                      <label className="mt-3 text-sm text-gray-600">
                         ชื่อสินค้า
                         <input
                           name="product_name"
@@ -1095,6 +1162,19 @@ export default function WarrantyDashboard() {
                           placeholder="กรอกชื่อสินค้า"
                           type="text"
                           required
+                        />
+                      </label>
+
+                      {/* ✅ รุ่น (Model) ในโหมดแก้ไข */}
+                      <label className="mt-3 text-sm text-gray-600">
+                        รุ่นสินค้า
+                        <input
+                          name="model"
+                          value={editForm?.model ?? ''}
+                          onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))}
+                          className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                          placeholder="กรอกรุ่นสินค้า"
+                          type="text"
                         />
                       </label>
 
@@ -1154,7 +1234,7 @@ export default function WarrantyDashboard() {
                           />
                         </label>
                         <label className="text-sm text-gray-600">
-                          วันหมดอายุ (คำนวณอัตโนมัติหากไม่ได้แก้ไข)
+                          วันหมดอายุ 
                           <input
                             name="expiry_date"
                             value={editForm?.expiry_date ?? ''}
@@ -1231,35 +1311,35 @@ export default function WarrantyDashboard() {
                               required
                             />
                           </label>
-                          {/* ✅ เพิ่มช่องรุ่น (Model) ใต้ชื่อสินค้า */}
-                           <label className="mt-3 text-sm text-gray-600">
-                            รุ่น (Model)
+
+                          {/* ✅ รุ่น (Model) ต่อรายการ — ไม่แชร์กันทั้งใบ */}
+                          <label className="mt-3 text-sm text-gray-600 block">
+                            รุ่นสินค้า
                             <input
-                            name="model"
-                            value={editForm?.model ?? ''}
-                            onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))}
-                            className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                            placeholder="กรอกรุ่นสินค้า"
-                            type="text"
-                        />
+                              value={it.model}
+                              onChange={e => patchItem(idx, { model: e.target.value })}
+                              className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                              placeholder="กรอกรุ่นสินค้า"
+                              type="text"
+                            />
                           </label>
 
                           <div className="mt-3 grid gap-3 md:grid-cols-2">
                             <label className="text-sm text-gray-600 block">
-                              ระยะเวลา (เดือน)
+                              ระยะเวลาการรับประกัน (เดือน)
                               <select
                                 value={it.duration_months}
                                 onChange={e => patchItem(idx, { duration_months: Number(e.target.value || 12) })}
                                 className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                               >
-                                {[6, 12, 18, 24].map(month => (
+                                {[1,3,6, 12, 18, 24].map(month => (
                                   <option key={month} value={month}>{month} เดือน</option>
                                 ))}
                               </select>
                             </label>
 
                             <label className="text-sm text-gray-600 block">
-                              Serial No. (สร้างอัตโนมัติ)
+                              Serial No. 
                               <input
                                 value={it.serial}
                                 onChange={e => patchItem(idx, { serial: e.target.value })}
@@ -1273,7 +1353,7 @@ export default function WarrantyDashboard() {
 
                           <div className="mt-3 grid gap-3 md:grid-cols-2">
                             <label className="text-sm text-gray-600 block">
-                              วันเริ่ม
+                              วันที่ซื้อสินค้า
                               <input
                                 value={it.purchase_date}
                                 onChange={e => patchItem(idx, { purchase_date: e.target.value })}
@@ -1283,7 +1363,7 @@ export default function WarrantyDashboard() {
                               />
                             </label>
                             <label className="text-sm text-gray-600 block">
-                              วันหมดอายุ (คำนวณอัตโนมัติ)
+                              วันหมดอายุ 
                               <input
                                 value={it.expiry_date}
                                 onChange={e => patchItem(idx, { expiry_date: e.target.value })}

@@ -18,7 +18,7 @@ export default function VerifyEmail() {
     const token = params.get('token')
     if (!token) {
       setStatus('fail')
-      setMessage('ลิงก์ไม่ถูกต้อง: ไม่พบโทเคน')
+      setMessage('กรุณายืนยันการเข้าสู่ระบบที่email')
       return
     }
 

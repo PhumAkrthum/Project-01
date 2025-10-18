@@ -1,35 +1,36 @@
-// src/pages/Home.jsx
 import { Link } from "react-router-dom";
 import "./Home.css";
 
 export default function Home() {
   return (
     <div className="bg-white text-gray-800 overflow-hidden">
-      {/* ===== HERO ===== */}
-      <section className="relative bg-[#eaf3ff] overflow-hidden pb-24">
-        {/* Animated wave background */}
-        <div className="absolute bottom-0 left-0 w-full overflow-hidden leading-none">
-          <svg
-            className="wave-motion"
-            viewBox="0 0 1440 320"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-          >
-            <path
-              fill="#dbeafe"
-              d="M0,160L48,154.7C96,149,192,139,288,133.3C384,128,480,128,576,144C672,160,768,192,864,208C960,224,1056,224,1152,202.7C1248,181,1344,139,1392,117.3L1440,96L1440,320L0,320Z"
-            />
-          </svg>
+      {/* ===== HERO SECTION ===== */}
+      <section className="relative bg-gradient-to-b from-[#e7f2ff] to-[#f5faff] pb-16 overflow-hidden">
+        {/* ==== Floating Bubbles ==== */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(12)].map((_, i) => (
+            <div
+              key={i}
+              className={`bubble`}
+              style={{
+                left: `${Math.random() * 100}%`,
+                animationDelay: `${i * 1.5}s`,
+                width: `${20 + Math.random() * 40}px`,
+                height: `${20 + Math.random() * 40}px`,
+              }}
+            ></div>
+          ))}
         </div>
 
+        {/* ==== HERO CONTENT ==== */}
         <div className="relative z-10 max-w-6xl mx-auto px-6 pt-24 text-center">
           <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 leading-snug">
             แพลตฟอร์มบริหารจัดการ
             <br />
-            การรับประกัน
+            การรับประกันที่ครบวงจร
           </h1>
           <p className="mt-4 text-gray-700 font-medium text-base sm:text-lg">
-            ปลอดภัย ใช้งานง่าย เข้าถึงได้ทุกคน
+            ปลอดภัย ใช้งานง่าย และเหมาะกับธุรกิจทุกขนาด
           </p>
 
           {/* ===== STATS ===== */}
@@ -42,8 +43,8 @@ export default function Home() {
             ].map((item, i) => (
               <div key={i} className="flex flex-col items-center group">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-blue-100 rounded-full blur-lg opacity-50 group-hover:opacity-80 transition"></div>
-                  <div className="w-16 h-16 rounded-full border-2 border-blue-600 flex items-center justify-center text-blue-600 font-semibold text-lg bg-white shadow-lg shadow-blue-100 transition transform group-hover:scale-105">
+                  <div className="absolute inset-0 bg-blue-100 rounded-full blur-lg opacity-40 group-hover:opacity-70 transition"></div>
+                  <div className="w-16 h-16 rounded-full border-2 border-blue-500 flex items-center justify-center text-blue-600 font-semibold text-lg bg-white shadow-md shadow-blue-100 transition transform group-hover:scale-105">
                     {item.value}
                   </div>
                 </div>
@@ -52,47 +53,45 @@ export default function Home() {
             ))}
           </div>
 
-          {/* ===== CLIENT / STORE CARDS ===== */}
+          {/* ===== CARDS ===== */}
           <div className="mt-16 grid sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
             {[
               {
                 icon: "https://cdn-icons-png.flaticon.com/512/1077/1077114.png",
                 title: "ลูกค้า",
-                desc: "ระบบจัดเก็บข้อมูลการรับประกันสินค้า สำหรับลูกค้า เพื่อความสะดวกในการตรวจสอบสถานะเอกสารและป้องกันการสูญหายของหลักฐานการรับประกัน",
+                desc: "ตรวจสอบสถานะและเอกสารรับประกันได้ทุกที่ทุกเวลา พร้อมบันทึกข้อมูลสินค้าอย่างเป็นระบบ",
                 btn: "เริ่มต้นสำหรับผู้ซื้อสินค้า",
-                gradient: "from-blue-400/50 to-blue-100/10",
-                to: "/signup?role=customer", // คงพฤติกรรมเดิม
+                to: "/signup?role=customer",
               },
               {
                 icon: "https://cdn-icons-png.flaticon.com/512/1170/1170678.png",
                 title: "ร้านค้า",
-                desc: "ระบบบริหารจัดการการรับประกันสำหรับร้านค้า เพื่อเพิ่มประสิทธิภาพการให้บริการหลังการขายและวิเคราะห์ข้อมูลลูกค้าได้ง่ายขึ้น",
+                desc: "จัดการใบรับประกันของลูกค้าได้ง่าย บริหารข้อมูลหลังการขายแบบมืออาชีพ",
                 btn: "เริ่มต้นสำหรับร้านค้า",
-                gradient: "from-orange-400/50 to-orange-100/10",
-                to: "/signup?role=store", // คงพฤติกรรมเดิม
+                to: "/signup?role=store",
               },
             ].map((card, i) => (
               <div
                 key={i}
-                className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 hover:shadow-2xl transition duration-500 text-center hover:-translate-y-2 hover:bg-gradient-to-b hover:from-white hover:to-[#f3f7ff]"
+                className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 hover:shadow-2xl transition duration-500 text-center hover:-translate-y-2"
               >
                 <div className="flex justify-center mb-4">
                   <div className="relative animate-float">
-                    <div
-                      className={`absolute inset-0 bg-gradient-to-b ${card.gradient} rounded-full blur-lg opacity-80 w-20 h-20 mx-auto`}
-                    />
-                    <div className="relative w-20 h-20 flex items-center justify-center rounded-full bg-white/60 backdrop-blur-md shadow-md border border-white/30">
+                    <div className="absolute inset-0 bg-blue-100 rounded-full blur-lg opacity-60 w-20 h-20" />
+                    <div className="relative w-20 h-20 flex items-center justify-center rounded-full bg-white shadow-md border border-white/40">
                       <img
                         src={card.icon}
                         alt={card.title}
-                        className="w-12 h-12 object-contain z-10"
+                        className="w-10 h-10 object-contain z-10"
                       />
                     </div>
                   </div>
                 </div>
 
                 <h3 className="text-xl font-bold text-gray-900">{card.title}</h3>
-                <p className="mt-3 text-gray-600 text-sm leading-relaxed">{card.desc}</p>
+                <p className="mt-3 text-gray-600 text-sm leading-relaxed">
+                  {card.desc}
+                </p>
                 <Link
                   to={card.to}
                   className="inline-block mt-5 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"
@@ -103,11 +102,32 @@ export default function Home() {
             ))}
           </div>
         </div>
+
+        {/* ===== WAVE ===== */}
+        <div className="relative w-full overflow-hidden leading-none -mb-[2px] mt-12">
+          <svg
+            viewBox="0 0 1440 320"
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-full h-auto wave-smooth"
+          >
+            <defs>
+              <linearGradient id="softBlueWave" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#9ccfff" />
+                <stop offset="60%" stopColor="#bde2ff" />
+                <stop offset="100%" stopColor="#eaf6ff" />
+              </linearGradient>
+            </defs>
+            <path
+              fill="url(#softBlueWave)"
+              d="M0,192L48,176C96,160,192,128,288,122.7C384,117,480,139,576,154.7C672,171,768,181,864,181.3C960,181,1056,171,1152,176C1248,181,1344,203,1392,213.3L1440,224V320H0Z"
+            ></path>
+          </svg>
+        </div>
       </section>
 
       {/* ===== WHY CHOOSE ===== */}
-      <section className="bg-white py-24">
-        <div className="max-w-6xl mx-auto px-6 text-center">
+      <section className="relative bg-[#f2f8ff] py-16 text-center -mt-10 z-10">
+        <div className="max-w-6xl mx-auto px-6">
           <h2 className="text-3xl font-extrabold text-gray-900 mb-14">
             ทำไมต้องเลือก Warranty
           </h2>
@@ -157,31 +177,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== CTA ===== */}
-      <section className="bg-[#eaf3ff] py-20 text-center px-6 relative overflow-hidden">
-        {/* ถ้ามีไฟล์ /public/wave.svg จะเห็นลายคลื่นเลื่อนเบา ๆ */}
-        <div className="absolute top-0 left-0 w-full h-full bg-[url('/wave.svg')] opacity-10 bg-repeat-x animate-waveSlide" />
-        <h3 className="text-2xl font-bold text-gray-900 relative z-10">
-          พร้อมเริ่มต้นแล้วหรือยัง?
-        </h3>
-        <p className="text-gray-600 mt-3 max-w-lg mx-auto text-sm relative z-10">
-          เข้าร่วมร้านค้าและลูกค้าหลายพันรายที่เชื่อถือในระบบของเรา เริ่มต้นใช้งานได้ฟรีวันนี้
-        </p>
-        <div className="mt-8 flex flex-wrap gap-4 justify-center relative z-10">
-          <Link
-            to="/signin"
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition"
-          >
-            เข้าสู่ระบบ
-          </Link>
-          <Link
-            to="/signup"
-            className="px-6 py-2.5 bg-white border border-blue-600 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 transition"
-          >
-            สมัครสมาชิก
-          </Link>
-        </div>
-      </section>
+      
     </div>
   );
 }

@@ -36,17 +36,14 @@ function statusForItem(item, notifyDays) {
 }
 
 /**
- * สร้าง PDF ระดับ "ใบ" (Header) โดยพิมพ์ทุกรายการสินค้าในใบ
- * ใช้ร่วมกันได้ทั้งร้าน (STORE) และลูกค้า (CUSTOMER)
  * GET /warranties/:warrantyId/pdf
- * GET /customer/warranties/:warrantyId/pdf  (จะถูกเรียกมาที่ฟังก์ชันเดียวกัน)
+ * GET /customer/warranties/:warrantyId/pdf
+ * สร้าง PDF ระดับ “ใบ” (หน้า/รายการ)
  */
 export async function downloadWarrantyPdf(req, res) {
   try {
     const role = req.user?.role;
-    if (!role) {
-      return sendError(res, 401, "ต้องเข้าสู่ระบบก่อน");
-    }
+    if (!role) return sendError(res, 401, "ต้องเข้าสู่ระบบก่อน");
 
     const warrantyId = String(req.params.warrantyId);
 
@@ -57,47 +54,39 @@ export async function downloadWarrantyPdf(req, res) {
         store: { include: { storeProfile: true } },
       },
     });
+    if (!header) return sendError(res, 404, "ไม่พบใบรับประกัน");
 
-    if (!header) {
-      return sendError(res, 404, "ไม่พบใบรับประกัน");
-    }
-
-    // ตรวจสิทธิ์ตามบทบาท
+    // ตรวจสิทธิ์
     if (role === "STORE") {
       const storeId = currentStoreId(req);
       if (storeId == null || header.storeId !== storeId) {
         return sendError(res, 404, "ไม่พบใบรับประกัน");
       }
     } else if (role === "CUSTOMER") {
-      // ป้องกันกรณีเรียกตรง ๆ โดยไม่ผ่าน controller ลูกค้า
       const isOwner =
         header.customerUserId === req.user.id ||
         (header.customerEmail && header.customerEmail === req.user.email);
-      if (!isOwner) {
-        return sendError(res, 403, "Forbidden");
-      }
+      if (!isOwner) return sendError(res, 403, "Forbidden");
     } else {
       return sendError(res, 403, "Forbidden");
     }
 
     const profile = header.store?.storeProfile;
-    const notifyDays = profile?.notifyDaysInAdvance ?? DEFAULT_NOTIFY_DAYS;
 
-    // === headers HTTP ===
+    // HTTP headers
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
       `inline; filename="warranty-${header.code || header.id}.pdf"`
     );
 
-    // =================== ส่วน "สร้าง PDF" ===================
-    // helper
+    // ==== สร้าง PDF ====
     const mm = (v) => v * 2.83464567;
     const T = (v, f = "-") =>
       v === undefined || v === null || String(v).trim() === "" ? f : String(v);
 
     const fontCandidatesRegular = [
-      process.env.THAI_FONT_REGULAR, // optional ENV override
+      process.env.THAI_FONT_REGULAR,
       path.resolve(process.cwd(), "src/assets/fonts/Sarabun-Regular.ttf"),
       path.resolve(process.cwd(), "src/assets/fonts/NotoSansThai-Regular.ttf"),
     ].filter(Boolean);
@@ -110,19 +99,15 @@ export async function downloadWarrantyPdf(req, res) {
 
     function firstExistingFile(paths) {
       for (const p of paths) {
-        try {
-          if (p && fs.existsSync(p)) return p;
-        } catch {}
+        try { if (p && fs.existsSync(p)) return p; } catch {}
       }
       return null;
     }
 
     const doc = new PDFDocument({ autoFirstPage: false });
 
-    // --- โหลดฟอนต์ไทย ---
     const regPath = firstExistingFile(fontCandidatesRegular);
     const boldPath = firstExistingFile(fontCandidatesBold);
-
     if (!regPath || !/\.ttf$/i.test(regPath)) {
       return sendError(
         res,
@@ -130,39 +115,30 @@ export async function downloadWarrantyPdf(req, res) {
         "THAI_FONT_NOT_FOUND: กรุณาวาง Sarabun-Regular.ttf (หรือ NotoSansThai-Regular.ttf) ไว้ที่ src/assets/fonts/"
       );
     }
-
     try {
-      // ใช้ buffer เพื่อหลีกเลี่ยงปัญหา path/encoding
       doc.registerFont("THAI", fs.readFileSync(regPath));
       if (boldPath && /\.ttf$/i.test(boldPath)) {
         doc.registerFont("THAI_BOLD", fs.readFileSync(boldPath));
       }
-      doc.font("THAI"); // default
+      doc.font("THAI");
     } catch (e) {
       console.error("Font load error:", e);
       return sendError(
         res,
         500,
-        "Unknown font format: โปรดใช้ไฟล์ TTF แบบ static (เช่น Sarabun-Regular.ttf) ไม่ใช่ไฟล์ Variable/WOFF"
+        "Unknown font format: โปรดใช้ไฟล์ TTF แบบ static"
       );
     }
 
-    // เริ่มส่งสตรีม PDF ออกไป
     doc.pipe(res);
 
-    // helpers วาดหัว + ช่อง
     function headerTitle(left, top, width) {
-      doc
-        .font(boldPath ? "THAI_BOLD" : "THAI")
-        .fontSize(18)
-        .fillColor("#000")
+      doc.font(boldPath ? "THAI_BOLD" : "THAI").fontSize(18).fillColor("#000")
         .text("ใบรับประกัน", left, top, { width: width / 2, align: "left" });
-
       doc.font("THAI").fontSize(14).text("WARRANTY", left, top + mm(8), {
         width: width / 2,
         align: "left",
       });
-
       doc.font("THAI").fontSize(12).text("สำหรับผู้ซื้อ", left + width / 2, top, {
         width: width / 2,
         align: "right",
@@ -171,20 +147,11 @@ export async function downloadWarrantyPdf(req, res) {
 
     function cell(x, y, w, h, th, en, value, pad = mm(3.5)) {
       doc.rect(x, y, w, h).stroke();
-      doc
-        .font("THAI")
-        .fontSize(10)
-        .fillColor("#000")
+      doc.font("THAI").fontSize(10).fillColor("#000")
         .text(th, x + pad, y + pad, { width: w - pad * 2 });
-      doc
-        .font("THAI")
-        .fontSize(9)
-        .fillColor("#555")
+      doc.font("THAI").fontSize(9).fillColor("#555")
         .text(en, x + pad, y + pad + mm(5), { width: w - pad * 2 });
-      doc
-        .font("THAI")
-        .fontSize(11)
-        .fillColor("#000")
+      doc.font("THAI").fontSize(11).fillColor("#000")
         .text(T(value), x + pad, y + pad + mm(11), {
           width: w - pad * 2,
           height: h - pad * 2 - mm(11),
@@ -209,87 +176,93 @@ export async function downloadWarrantyPdf(req, res) {
       const colL = Math.round(tableW * 0.55);
       const colR = tableW - colL;
 
+      // ลำดับใหม่ตามที่ขอ:
+      // 1) เลขที่/สินค้า
+      // 2) รุ่น/Serial
+      // 3) วันที่ซื้อ / วันหมดอายุ      ← ย้ายขึ้นมาก่อนชื่อลูกค้า
+      // 4) ชื่อลูกค้า / โทรลูกค้า
+      // 5) เงื่อนไขการรับประกัน (เต็มแถว)
+      // 6) ชื่อร้าน (ซ้าย) / เบอร์โทรร้านค้า (ขวา)
+      // 7) ที่อยู่ร้านค้า (เต็มแถว)
+
       const rowH1 = mm(22);
       const rowH2 = mm(22);
-      const rowH3 = mm(28);
-      const rowH4 = mm(30);
-      const rowH5 = mm(22);
-      const totalH = rowH1 + rowH2 + rowH3 + rowH4 + rowH5;
+      const rowH3 = mm(22);
+      const rowH4 = mm(28);
+      const rowH5 = mm(30);
+      const rowH6 = mm(22);
+      const rowH7 = mm(28);
+      const totalH = rowH1 + rowH2 + rowH3 + rowH4 + rowH5 + rowH6 + rowH7;
 
+      // กรอบรวม
       doc.rect(left, tableTop, tableW, totalH).stroke();
 
       let y = tableTop;
 
-      // แถว 1
+      // แถว 1 — เลขที่ / สินค้า
       cell(left, y, colL, rowH1, "เลขที่", "Card No.", base.cardNo);
       cell(left + colL, y, colR, rowH1, "สินค้า", "Product", item.productName);
       y += rowH1;
 
-      // แถว 2
+      // แถว 2 — รุ่น / Serial
       cell(left, y, colL, rowH2, "รุ่น", "Model", item.model || "-");
       cell(left + colL, y, colR, rowH2, "หมายเลขเครื่อง", "Serial No.", item.serialNumber);
       y += rowH2;
 
-      // แถว 3
-      cell(left, y, colL, rowH3, "ชื่อ-นามสกุล", "Customer's Name", base.customerName);
-      cell(left + colL, y, colR, rowH3, "โทรศัพท์", "Tel.", base.customerTel);
-      y += rowH3;
-
-      // แถว 4: เปลี่ยนจาก Address → เงื่อนไขการรับประกัน (Warranty Terms)
-      doc.rect(left, y, tableW, rowH4).stroke();
-      doc.font("THAI").fontSize(10).fillColor("#000").text("เงื่อนไขการรับประกัน", left + mm(3.5), y + mm(3.5));
-      doc.font("THAI").fontSize(9).fillColor("#555").text("Warranty Terms", left + mm(3.5), y + mm(8.5));
-      doc
-        .font("THAI")
-        .fontSize(11)
-        .fillColor("#000")
-        .text(T(item.coverageNote), left + mm(3.5), y + mm(14), {
-          width: tableW - mm(7),
-        });
-      y += rowH4;
-
-      // แถว 5
-      const purchaseDate = item.purchaseDate || base.purchaseDate;
-      const purchaseTxt = purchaseDate
-        ? new Date(purchaseDate).toLocaleDateString("th-TH")
+      // เตรียมวันที่
+      const purchaseTxt = item.purchaseDate
+        ? new Date(item.purchaseDate).toLocaleDateString("th-TH")
         : "-";
       const expiryTxt = item.expiryDate
         ? new Date(item.expiryDate).toLocaleDateString("th-TH")
         : "-";
 
-      cell(
-        left,
-        y,
-        colL,
-        rowH5,
-        "ชื่อจากบริษัทฯ/ตัวแทนจำหน่าย",
-        "Dealer' Name",
-        base.dealerName
-      );
+      // แถว 3 — วันที่ซื้อ / วันหมดอายุ (แยกสองช่อง)
+      cell(left, y, colL, rowH3, "วันที่ซื้อ", "Purchase Date", purchaseTxt);
+      cell(left + colL, y, colR, rowH3, "วันหมดอายุ", "Expiry Date", expiryTxt);
+      y += rowH3;
 
-      // แสดงทั้งวันที่ซื้อและวันหมดอายุในช่องเดียว (ขวา)
-      cell(
-        left + colL,
-        y,
-        colR,
-        rowH5,
-        "วันที่ซื้อ / วันหมดอายุ",
-        "Purchase / Expiry",
-        `${purchaseTxt}\nหมดอายุ: ${expiryTxt}`
-      );
+      // แถว 4 — ชื่อลูกค้า / โทรลูกค้า
+      cell(left, y, colL, rowH4, "ชื่อ-นามสกุล", "Customer's Name", base.customerName);
+      cell(left + colL, y, colR, rowH4, "โทรศัพท์", "Tel.", base.customerTel);
+      y += rowH4;
+
+      // แถว 5 (เต็มแถว) — เงื่อนไขการรับประกัน
+      doc.rect(left, y, tableW, rowH5).stroke();
+      doc.font("THAI").fontSize(10).fillColor("#000")
+        .text("เงื่อนไขการรับประกัน", left + mm(3.5), y + mm(3.5));
+      doc.font("THAI").fontSize(9).fillColor("#555")
+        .text("Warranty Terms", left + mm(3.5), y + mm(8.5));
+      doc.font("THAI").fontSize(11).fillColor("#000")
+        .text(T(item.coverageNote), left + mm(3.5), y + mm(14), {
+          width: tableW - mm(7),
+        });
       y += rowH5;
 
-      // หมายเหตุบรรทัดล่าง
-      doc
-        .font("THAI")
-        .fontSize(11)
-        .fillColor("#000")
-        .text(
-          T(base.footerNote, "โปรดนำใบรับประกันฉบับนี้มาแสดงเป็นหลักฐานทุกครั้งเมื่อใช้บริการ"),
-          left,
-          y + mm(8),
-          { width, align: "left" }
-        );
+      // แถว 6 — ชื่อร้าน / เบอร์โทรร้านค้า (ไม่รวมกัน)
+      cell(left, y, colL, rowH6, "ชื่อจากบริษัทฯ/ตัวแทนจำหน่าย", "Dealer' Name", T(base.dealerName));
+      cell(left + colL, y, colR, rowH6, "โทรศัพท์", "Tel.", T(base.dealerPhone));
+      y += rowH6;
+
+      // แถว 7 (เต็มแถว) — ที่อยู่ร้านค้า
+      doc.rect(left, y, tableW, rowH7).stroke();
+      doc.font("THAI").fontSize(10).fillColor("#000")
+        .text("ที่อยู่ร้านค้า", left + mm(3.5), y + mm(3.5));
+      doc.font("THAI").fontSize(9).fillColor("#555")
+        .text("Store Address", left + mm(3.5), y + mm(8.5));
+      doc.font("THAI").fontSize(11).fillColor("#000")
+        .text(T(base.company?.address || "-"), left + mm(3.5), y + mm(14), {
+          width: tableW - mm(7),
+        });
+      y += rowH7;
+
+      // หมายเหตุท้ายหน้า
+      doc.font("THAI").fontSize(11).fillColor("#000").text(
+        T(base.footerNote, "โปรดนำใบรับประกันฉบับนี้มาแสดงเป็นหลักฐานทุกครั้งเมื่อใช้บริการ"),
+        left,
+        y + mm(8),
+        { width, align: "left" }
+      );
 
       // ข้อมูลบริษัท (ล่างซ้าย)
       const companyLines = [
@@ -301,22 +274,20 @@ export async function downloadWarrantyPdf(req, res) {
       ].filter(Boolean);
 
       if (companyLines.length) {
-        doc
-          .font("THAI")
-          .fontSize(10)
-          .fillColor("#000")
+        doc.font("THAI").fontSize(10).fillColor("#000")
           .text(companyLines.join("\n"), left + mm(22), mm(297) - mm(44), {
             width: width - mm(22),
           });
       }
     }
 
-    // map ข้อมูล header → base & items
+    // map header → base & items
     const base = {
       cardNo: header.code || header.id,
       customerName: header.customerName || "-",
       customerTel: header.customerPhone || "-",
       dealerName: profile?.storeName || "-",
+      dealerPhone: profile?.phone || "", // ใช้ในช่อง "เบอร์โทรศัพท์ร้านค้า"
       purchaseDate: header.createdAt,
       footerNote: "โปรดนำใบรับประกันฉบับนี้มาแสดงเป็นหลักฐานทุกครั้งเมื่อใช้บริการ",
       company: {
@@ -345,23 +316,18 @@ export async function downloadWarrantyPdf(req, res) {
           coverageNote: null,
         }];
 
-    // วาดหน้า (รายการละ 1 หน้า)
     for (const it of items) {
-      // const { statusTag, daysLeft } = statusForItem(it, notifyDays); // ถ้าจะใช้ต่อ
       drawWarrantyPage(base, it);
     }
 
     doc.end();
-    // =================== จบส่วนสร้าง PDF ===================
   } catch (error) {
     console.error("downloadWarrantyPdf error", error);
     return sendError(res, 500, "ไม่สามารถสร้างไฟล์ PDF ได้");
   }
 }
 
-/**
- * (ตัวอย่าง) ถ้าจะคง endpoint ดูรายละเอียดใบแบบ JSON
- */
+/** อ่านรายละเอียดใบแบบ JSON */
 export async function getWarrantyHeader(req, res) {
   const storeId = currentStoreId(req);
   if (storeId == null) {
@@ -381,5 +347,66 @@ export async function getWarrantyHeader(req, res) {
   } catch (e) {
     console.error("getWarrantyHeader error", e);
     return sendError(res, 500, "โหลดข้อมูลใบรับประกันไม่สำเร็จ");
+  }
+}
+
+/**
+ * PATCH /warranties/:warrantyId
+ * แก้ไขข้อมูลระดับ “ใบ” (เช่น อีเมลลูกค้า) และผูกกับ user ถ้ามีอีเมลตรงกัน
+ */
+export async function updateWarrantyHeader(req, res) {
+  const storeId = currentStoreId(req);
+  if (storeId == null) {
+    return sendError(res, 401, "ต้องเข้าสู่ระบบร้านค้าก่อน");
+  }
+
+  try {
+    const warrantyId = String(req.params.warrantyId);
+    const header = await prisma.warranty.findUnique({ where: { id: warrantyId } });
+    if (!header || header.storeId !== storeId) {
+      return sendError(res, 404, "ไม่พบใบรับประกัน");
+    }
+
+    const body = req.body || {};
+    const normEmail = body.customerEmail
+      ? String(body.customerEmail).trim().toLowerCase()
+      : null;
+
+    let customerUserId = header.customerUserId;
+    let customerName = header.customerName;
+    let customerPhone = header.customerPhone;
+
+    // เปลี่ยนอีเมล → ผูกกับบัญชีลูกค้าโดยอัตโนมัติถ้ามี
+    if (normEmail) {
+      const user = await prisma.user.findUnique({ where: { email: normEmail } });
+      if (user) {
+        customerUserId = user.id;
+        const cp = await prisma.customerProfile.findUnique({
+          where: { userId: user.id },
+          select: { firstName: true, lastName: true, phone: true },
+        });
+        const nm = `${(cp?.firstName || "").trim()} ${(cp?.lastName || "").trim()}`.trim();
+        if (nm) customerName = nm;
+        if (cp?.phone) customerPhone = cp.phone;
+      } else {
+        customerUserId = null;
+      }
+    }
+
+    const updated = await prisma.warranty.update({
+      where: { id: warrantyId },
+      data: {
+        customerEmail: normEmail ?? header.customerEmail,
+        customerUserId,
+        customerName,
+        customerPhone,
+      },
+      include: { items: true },
+    });
+
+    return sendSuccess(res, { warranty: updated });
+  } catch (e) {
+    console.error("updateWarrantyHeader error", e);
+    return sendError(res, 500, "ไม่สามารถแก้ไขข้อมูลใบได้");
   }
 }
