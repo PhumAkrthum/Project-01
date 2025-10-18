@@ -60,17 +60,6 @@ export default function Navbar() {
           </NavLink>
           <a href="#features" className="text-sm text-gray-600 hover:text-gray-900">การรับประกัน</a>
           <a href="#why" className="text-sm text-gray-600 hover:text-gray-900">เกี่ยวกับเรา</a>
-
-          {isAuthenticated && (
-            <NavLink
-              to={dashHref}
-              className={({ isActive }) =>
-                `text-sm ${isActive ? 'text-[color:var(--brand)]' : 'text-gray-600 hover:text-gray-900'}`
-              }
-            >
-              แดชบอร์ด
-            </NavLink>
-          )}
         </div>
 
         {/* ปุ่มขวา */}
