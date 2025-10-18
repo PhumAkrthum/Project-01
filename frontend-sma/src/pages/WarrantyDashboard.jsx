@@ -143,12 +143,22 @@ export default function WarrantyDashboard() {
   // 🔔 Notification states
   const [isNotifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef(null)
-  const [notifications, setNotifications] = useState([
-    { id: 'n1', type: 'EXPIRING', title: 'ใบรับประกันกำลังใกล้หมดอายุ', desc: 'iPhone 15 Pro จะหมดอายุใน 14 วัน', date: 'วันนี้', read: false },
-    { id: 'n2', type: 'NEW', title: 'สร้างใบรับประกันใหม่สำเร็จ', desc: 'Samsung Galaxy Tab S9', date: 'เมื่อวาน', read: false },
-  ])
+  const [notifications, setNotifications] = useState([])
+  // ✅ โหลดจาก backend
+  useEffect(() => {
+    if (!storeIdResolved) return
+    const fetchNotifications = async () => {
+      try {
+        const response = await api.get(`/store/${storeIdResolved}/notifications`)
+        const notiData = response.data?.data?.notifications ?? []
+        setNotifications(notiData)
+      } catch (err) {
+        console.error('โหลดการแจ้งเตือนไม่สำเร็จ', err)
+      }
+    }
+    fetchNotifications()
+}, [storeIdResolved])
   const unreadCount = notifications.filter(n => !n.read).length
-
   // profile modal
   const [isProfileModalOpen, setProfileModalOpen] = useState(false)
   const [profileTab, setProfileTab] = useState('info')
@@ -190,7 +200,15 @@ export default function WarrantyDashboard() {
     images: [],
   })
   const [createItems, setCreateItems] = useState([makeItem()])
-  const addItem = () => setCreateItems(prev => [...prev, makeItem()])
+  // ✅ เพิ่ม logic ดึงอีเมลจากใบแรกตอนเพิ่มสินค้าใหม่
+  const addItem = () => {
+    setCreateItems(prev => {
+      const emailFromFirst = prev[0]?.customer_email || ''
+      const newItem = makeItem()
+      if (emailFromFirst) newItem.customer_email = emailFromFirst
+      return [...prev, newItem]
+    })
+  }
   const removeItem = (idx) => setCreateItems(prev => prev.filter((_, i) => i !== idx))
   // ✅ แก้ไข patchItem ให้ auto-fill email จากใบแรก
   const patchItem = (idx, patch) => {
@@ -536,6 +554,7 @@ export default function WarrantyDashboard() {
       }
 
       await fetchDashboard()
+      await fetchNotifications?.()
       setWarrantyModalOpen(false)
     } catch (error) {
       setWarrantyModalError(error?.response?.data?.error?.message || 'ไม่สามารถบันทึกใบรับประกันได้')
