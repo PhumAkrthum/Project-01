@@ -387,11 +387,12 @@ export default function Signup() {
                     required
                   >
                     <option value="" disabled>เลือกประเภทร้านค้า</option>
-                    <option value="electronics">อิเล็กทรอนิกส์</option>
-                    <option value="appliance">เครื่องใช้ไฟฟ้า</option>
-                    <option value="mobile">มือถือ &amp; แกดเจ็ต</option>
-                    <option value="automotive">ยานยนต์</option> 
-                    <option value="other">อื่น ๆ</option>
+                      <option value="electronics">อิเล็กทรอนิกส์</option>
+                      <option value="appliance">เครื่องใช้ไฟฟ้า</option>
+                      <option value="furniture">เฟอร์นิเจอร์</option>
+                      <option value="automotive">ยานยนต์</option>
+                      <option value="machine">เครื่องจักร / เครื่องมือช่าง</option>
+                      <option value="other">อื่น ๆ</option>
                   </select>
                 </div>
               </label>

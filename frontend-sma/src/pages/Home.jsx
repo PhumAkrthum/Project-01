@@ -1,5 +1,12 @@
 import { Link } from "react-router-dom";
 import "./Home.css";
+import ShieldLogo from "../components/AppLogo";
+
+<Link to="/" className="flex items-center gap-2">
+  <ShieldLogo className="w-8 h-8" />
+  <span className="font-bold text-lg">Warranty</span>
+</Link>
+
 
 export default function Home() {
   return (
@@ -24,6 +31,14 @@ export default function Home() {
 
         {/* ==== HERO CONTENT ==== */}
         <div className="relative z-10 max-w-6xl mx-auto px-6 pt-24 text-center">
+          <div className="flex justify-center mb-6">
+            <img
+              src="/home-assets/logo.png"
+              alt="Warranty Platform Logo"
+              className="w-28 sm:w-36 drop-shadow-md animate-float"
+            />
+          </div>
+
           <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 leading-snug">
             แพลตฟอร์มบริหารจัดการ
             <br />
