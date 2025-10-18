@@ -1,3 +1,6 @@
+// src/pages/SignIn.jsx
+// [อัปเดต] **ตัดโค้ดไอคอนตาออกทั้งหมด 100%**
+
 import { useEffect, useState } from "react";
 import { Link, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
@@ -17,18 +20,7 @@ const Icon = {
       <path d="M8 11V7a4 4 0 018 0v4" />
     </svg>
   ),
-  eye: (cls = "w-5 h-5") => (
-    <svg viewBox="0 0 24 24" className={`${cls} text-gray-400`} fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  ),
-  eyeOff: (cls = "w-5 h-5") => (
-    <svg viewBox="0 0 24 24" className={`${cls} text-gray-400`} fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a21.62 21.62 0 01-3.34 4.26M1 1l22 22" />
-      <path d="M9.88 9.88A3 3 0 0012 15a3 3 0 002.12-.88" />
-    </svg>
-  ),
+  // Icon.eye และ Icon.eyeOff ถูกลบออกทั้งหมดแล้ว
 };
 
 function InputIcon({ left, right, className = "", ...props }) {
@@ -40,7 +32,8 @@ function InputIcon({ left, right, className = "", ...props }) {
         className={
           "mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 " +
           (left ? "pl-10 " : "") +
-          (right ? "pr-10 " : "") +
+          // ไม่มีการเพิ่ม pr-10 เมื่อไม่มี right icon แล้ว
+          (right ? "pr-10 " : "") + 
           className
         }
       />
@@ -105,7 +98,7 @@ export default function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setToken } = useAuth?.() ?? { setToken: () => {} };
-  const [showPwd, setShowPwd] = useState(false);
+  // const [showPwd, setShowPwd] = useState(false); // **ถูกลบออก**
 
   useEffect(() => {
     const q = params.get("role");
@@ -148,7 +141,7 @@ export default function SignIn() {
       let redirectTo =
         location.state?.from?.pathname ||
         nextParam ||
-        (role === "STORE" ? "/dashboard/warranty" : "/customer/warranties"); // ← เดิมใส่ "/"
+        (role === "STORE" ? "/dashboard/warranty" : "/customer/warranties");
 
       navigate(redirectTo, { replace: true });
     } catch (err) {
@@ -207,15 +200,11 @@ export default function SignIn() {
               <span className="block text-sm font-medium text-gray-700">รหัสผ่าน</span>
               <InputIcon
                 name="password"
-                type={showPwd ? "text" : "password"}
+                type="password" // ตั้งค่าเป็น password เสมอ
                 placeholder="กรอกรหัสผ่าน"
                 required
                 left={Icon.lock()}
-                right={
-                  <button type="button" onClick={() => setShowPwd(v => !v)} aria-label="toggle password">
-                    {showPwd ? Icon.eyeOff() : Icon.eye()}
-                  </button>
-                }
+                right={null} // **ลบไอคอนตาออกแล้ว**
               />
             </label>
 

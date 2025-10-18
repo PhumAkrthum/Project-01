@@ -1,18 +1,24 @@
-.wave-motion {
-  animation: waveParallax 10s ease-in-out infinite alternate;
+/* ===== Wave motion ===== */
+.wave-smooth {
+  animation: gentleWave 14s ease-in-out infinite alternate;
+  filter: blur(0.3px);
 }
 
-@keyframes waveParallax {
+@keyframes gentleWave {
   0% {
-    transform: translateX(0);
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(5px);
   }
   100% {
-    transform: translateX(-50px);
+    transform: translateY(0px);
   }
 }
 
+/* ===== Icon float ===== */
 .animate-float {
-  animation: floatUpDown 4s ease-in-out infinite;
+  animation: floatUpDown 4.5s ease-in-out infinite;
 }
 
 @keyframes floatUpDown {
@@ -20,16 +26,30 @@
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-8px);
+    transform: translateY(-7px);
   }
 }
 
-/* background wave scroll */
-@keyframes waveSlide {
-  from {
-    background-position-x: 0;
+/* ===== Bubble Motion ===== */
+.bubble {
+  position: absolute;
+  bottom: -80px;
+  background: radial-gradient(circle at 30% 30%, #dff2ff, #a6d6ff);
+  border-radius: 50%;
+  opacity: 0.6;
+  animation: bubbleFloat 12s linear infinite;
+}
+
+@keyframes bubbleFloat {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.4;
   }
-  to {
-    background-position-x: 1000px;
+  40% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-900px) scale(1.4);
+    opacity: 0;
   }
 }
