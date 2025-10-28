@@ -79,8 +79,7 @@ export function AuthProvider({ children }) {
     try {
       setLoading(true);
       const { data } = await api.get("/auth/me");
-      // คาดหวังโครงสร้างประมาณนี้:
-      // { id, email, role, isVerified, storeProfile: { id, ... }, customerProfile: {...} }
+ 
       setUser(data?.user || data || null);
       return data?.user || data || null;
     } catch {

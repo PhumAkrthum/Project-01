@@ -93,6 +93,14 @@ function addMonthsKeepDay(startISO, months) {
   }
   return toISODate(result)
 }
+function addDays(startISO, days) {
+  if (!startISO) return ''
+  const [y, m, d] = startISO.split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const base = new Date(Date.UTC(y, m - 1, d))
+  base.setUTCDate(base.getUTCDate() + Number(days || 0))
+  return toISODate(base)
+}
 function deriveItemStatusCode(item, notifyDays = 14) {
   if (!item?.expiryDate) return 'active'
   const today = new Date()
@@ -166,6 +174,10 @@ export default function WarrantyDashboard() {
     product_name: '',
     model: '', // ✅ เพิ่มฟิลด์รุ่นในโหมดสร้าง
     duration_months: 12,
+    // ✅ เพิ่มโหมดกำหนดเอง
+    duration_mode: 'preset',      // 'preset' | 'custom'
+    custom_unit: 'months',        // 'months' | 'days'
+    custom_value: '',             // จำนวนที่ผู้ใช้กรอกเอง
     serial: seedSN || nextSerialFromList(warranties),
     purchase_date: '',
     expiry_date: '',
@@ -189,10 +201,22 @@ export default function WarrantyDashboard() {
     setCreateItems(prev => {
       const next = prev.map((it, i) => (i === idx ? { ...it, ...patch } : it))
       const t = next[idx]
-      if (('purchase_date' in patch && t.purchase_date) || ('duration_months' in patch && t.purchase_date)) {
-        const m = Number(t.duration_months || 0) || 0
-        next[idx] = { ...t, expiry_date: m > 0 ? addMonthsKeepDay(t.purchase_date, m) : '' }
+      const changedPurchase = 'purchase_date' in patch
+      const changedPreset = 'duration_months' in patch
+      const changedCustom = 'duration_mode' in patch || 'custom_unit' in patch || 'custom_value' in patch
+
+      if ((changedPurchase || changedPreset || changedCustom) && t.purchase_date) {
+        if (t.duration_mode === 'custom' && t.custom_value) {
+          next[idx].expiry_date = computeExpiry(t.purchase_date, {
+            unit: t.custom_unit || 'months',
+            value: Number(t.custom_value) || 0,
+          })
+        } else {
+          const m = Number(t.duration_months || 0) || 0
+          next[idx].expiry_date = m > 0 ? addMonthsKeepDay(t.purchase_date, m) : ''
+        }
       }
+
       if ('customer_email' in patch && idx === 0) {
         const email = String(patch.customer_email || '').trim()
         for (let i = 1; i < next.length; i++) {
@@ -364,9 +388,17 @@ export default function WarrantyDashboard() {
   /* ========== โหมดแก้ไข: state + auto-expiry ========== */
   const [editForm, setEditForm] = useState(null)
   const [manualExpiry, setManualExpiry] = useState(false)
-  const computeExpiry = useCallback((purchaseISO, months) => {
-    const m = Number(months || 0)
-    if (!purchaseISO || !m) return ''
+  const computeExpiry = useCallback((purchaseISO, monthsOrCustom) => {
+    if (!purchaseISO) return ''
+    if (typeof monthsOrCustom === 'object' && monthsOrCustom) {
+      const { unit = 'months', value = 0 } = monthsOrCustom
+      if (!value) return ''
+      return unit === 'days'
+        ? addDays(purchaseISO, value)
+        : addMonthsKeepDay(purchaseISO, value)
+    }
+    const m = Number(monthsOrCustom || 0)
+    if (!m) return ''
     return addMonthsKeepDay(purchaseISO, m)
   }, [])
 
@@ -383,11 +415,18 @@ export default function WarrantyDashboard() {
       setManualExpiry(false)
       setEditHeaderEmail('')
     } else if (mode === 'edit' && item) {
+      const hasDays = typeof item.durationDays === 'number' && item.durationDays > 0
+      const hasMonths = typeof item.durationMonths === 'number' && item.durationMonths > 0
+
       setEditForm({
         product_name: item.productName || '',
         model: item.model || '', // ✅ ผูก model ตอนแก้ไข
-        duration_months: item.durationMonths ??
-          Math.max(1, Math.round((item.durationDays || 30) / 30)),
+        duration_months: hasMonths
+          ? item.durationMonths
+          : Math.max(1, Math.round((item.durationDays || 30) / 30)),
+        duration_mode: hasDays ? 'custom' : 'preset',
+        custom_unit: hasDays ? 'days' : 'months',
+        custom_value: hasDays ? item.durationDays : '',
         serial: item.serial || '',
         purchase_date: item.purchaseDate || '',
         expiry_date: item.expiryDate || '',
@@ -472,20 +511,41 @@ export default function WarrantyDashboard() {
 
     try {
       if (modalMode === 'edit' && selectedItem) {
-        const months = Number(editForm?.duration_months || 0) || undefined
         const purchase = String(editForm?.purchase_date || '').trim()
-        const expiryManual = String(editForm?.expiry_date || '').trim()
-        const autoExpiry = months && purchase ? addMonthsKeepDay(purchase, months) : ''
 
+        // คำนวณ expiry อัตโนมัติ ถ้าไม่ได้กรอกเอง
+        let expiryAuto = ''
+        if (!manualExpiry && purchase) {
+          if (editForm?.duration_mode === 'custom' && editForm?.custom_value) {
+            expiryAuto = computeExpiry(purchase, {
+              unit: editForm.custom_unit || 'months',
+              value: Number(editForm.custom_value) || 0,
+            })
+          } else {
+            expiryAuto = computeExpiry(purchase, Number(editForm?.duration_months || 0))
+          }
+        }
+
+        const expiryManual = String(editForm?.expiry_date || '').trim()
         const fd = new FormData()
         fd.append('productName', String(editForm?.product_name || '').trim())
         fd.append('model', String(editForm?.model || '').trim()) // ✅ ส่ง model ตอนแก้ไข
         fd.append('serial', String(editForm?.serial || '').trim())
         fd.append('purchaseDate', purchase)
-        if (months !== undefined) fd.append('durationMonths', String(months))
-        if (expiryManual || autoExpiry) {
-          fd.append('expiryDate', manualExpiry ? expiryManual : (expiryManual || autoExpiry))
+
+        // ✅ ส่ง durationMonths ก็ต่อเมื่อหน่วยเป็น "เดือน"
+        if (editForm?.duration_mode !== 'custom') {
+          const months = Number(editForm?.duration_months || 0)
+          if (months) fd.append('durationMonths', String(months))
+        } else if (editForm?.custom_unit === 'months') {
+          const months = Number(editForm?.custom_value || 0)
+          if (months) fd.append('durationMonths', String(months))
         }
+        // ถ้าเป็นวัน ให้พึ่ง expiryDate ที่คำนวณไว้
+
+        const finalExpiry = manualExpiry ? expiryManual : (expiryManual || expiryAuto)
+        if (finalExpiry) fd.append('expiryDate', finalExpiry)
+
         fd.append('coverageNote', String(editForm?.warranty_terms || '').trim())
         fd.append('note', String(editForm?.note || '').trim())
 
@@ -513,8 +573,24 @@ export default function WarrantyDashboard() {
       // โหมดสร้างหลายรายการในใบเดียว
       const payload = {
         items: createItems.map((it) => {
-          const months = Number(it.duration_months || 0) || 12
-          const autoExpiry = it.purchase_date ? addMonthsKeepDay(it.purchase_date, months) : ''
+          let monthsForApi = 0
+          let computedExpiry = (it.expiry_date || '').trim()
+
+          if (!computedExpiry && it.purchase_date) {
+            if (it.duration_mode === 'custom' && it.custom_value) {
+              const v = Number(it.custom_value) || 0
+              computedExpiry = computeExpiry(it.purchase_date, { unit: it.custom_unit || 'months', value: v })
+              monthsForApi = it.custom_unit === 'months' ? v : 0
+            } else {
+              const m = Number(it.duration_months || 0) || 12
+              computedExpiry = computeExpiry(it.purchase_date, m)
+              monthsForApi = m
+            }
+          } else {
+            monthsForApi = it.duration_mode === 'preset' ? Number(it.duration_months || 0) || 12
+              : (it.custom_unit === 'months' ? Number(it.custom_value || 0) || 0 : 0)
+          }
+
           return {
             customer_email: (it.customer_email || '').trim(),
             product_name: (it.product_name || '').trim(),
@@ -523,8 +599,8 @@ export default function WarrantyDashboard() {
             serial: (it.serial || '').trim(),
             warranty_terms: (it.warranty_terms || '').trim(),
             note: (it.note || '').trim(),
-            duration_months: months,
-            expiry_date: (it.expiry_date || autoExpiry || ''),
+            duration_months: monthsForApi,          // ถ้าเลือก "วัน" จะเป็น 0
+            expiry_date: computedExpiry || '',
           }
         }),
       }
@@ -837,7 +913,7 @@ export default function WarrantyDashboard() {
                                     </div>
                                     <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
                                       <div>Serial No.: <span className="font-medium text-slate-900">{it.serial || '-'}</span></div>
-                                      <div>วันที่ซื้อ: <span className="font-medium text-slate-900">{it.purchaseDate || '-'}</span></div>
+                                      <div>วันที่ซ่อม: <span className="font-medium text-slate-900">{it.purchaseDate || '-'}</span></div>
                                       <div>วันหมดอายุ: <span className="font-medium text-slate-900">{it.expiryDate || '-'}</span></div>
                                       <div>จำนวนวันคงเหลือ: <span className="font-medium text-slate-900">{it.daysLeft ?? 0} วัน</span></div>
                                       <div>รุ่น: <span className="font-medium text-slate-900">{it.model || '-'}</span></div>
@@ -1141,7 +1217,7 @@ export default function WarrantyDashboard() {
                         {/* spacer on dark header */}
                       </label>
                       <label className="text-sm text-gray-600 block">
-                        อีเมลลูกค้า (แก้ไขระดับใบ)
+                        อีเมลลูกค้า 
                         <input
                           value={editHeaderEmail}
                           onChange={e => setEditHeaderEmail(e.target.value)}
@@ -1153,13 +1229,13 @@ export default function WarrantyDashboard() {
 
                       {/* ฟอร์มแก้ไขแบบ controlled + auto-expiry */}
                       <label className="mt-3 text-sm text-gray-600">
-                        ชื่อสินค้า
+                        ชื่อสินค้าที่ทำการซ่อม
                         <input
                           name="product_name"
                           value={editForm?.product_name ?? ''}
                           onChange={e => setEditForm(f => ({ ...f, product_name: e.target.value }))}
                           className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                          placeholder="กรอกชื่อสินค้า"
+                          placeholder="กรอกชื่อสินค้าที่ทำการซ่อม"
                           type="text"
                           required
                         />
@@ -1167,29 +1243,36 @@ export default function WarrantyDashboard() {
 
                       {/* ✅ รุ่น (Model) ในโหมดแก้ไข */}
                       <label className="mt-3 text-sm text-gray-600">
-                        รุ่นสินค้า
+                        รุ่นสินค้าที่ทำการซ่อม
                         <input
                           name="model"
                           value={editForm?.model ?? ''}
                           onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))}
                           className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                          placeholder="กรอกรุ่นสินค้า"
+                          placeholder="กรอกรุ่นสินค้าที่ทำการซ่อม"
                           type="text"
                         />
                       </label>
 
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <label className="text-sm text-gray-600">
-                          ระยะเวลา (เดือน)
+                          ระยะเวลารับประกัน
                           <select
                             name="duration_months"
-                            value={editForm?.duration_months ?? 12}
+                            value={editForm?.duration_mode === 'preset' ? (editForm?.duration_months ?? 12) : 'other'}
                             onChange={e => {
-                              const v = Number(e.target.value || 12)
+                              const v = e.target.value
                               setEditForm(f => {
-                                const next = { ...f, duration_months: v }
-                                if (!manualExpiry) next.expiry_date = computeExpiry(next.purchase_date, v)
-                                return next
+                                if (v === 'other') {
+                                  const next = { ...f, duration_mode: 'custom', custom_unit: 'months', custom_value: 12 }
+                                  if (!manualExpiry) next.expiry_date = computeExpiry(next.purchase_date, { unit: 'months', value: 12 })
+                                  return next
+                                } else {
+                                  const vNum = Number(v || 12)
+                                  const next = { ...f, duration_mode: 'preset', duration_months: vNum }
+                                  if (!manualExpiry) next.expiry_date = computeExpiry(next.purchase_date, vNum)
+                                  return next
+                                }
                               })
                             }}
                             className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
@@ -1197,6 +1280,7 @@ export default function WarrantyDashboard() {
                             {[6, 12, 18, 24].map(month => (
                               <option key={month} value={month}>{month} เดือน</option>
                             ))}
+                            <option value="other">อื่นๆ (ระบุเอง)</option>
                           </select>
                         </label>
 
@@ -1214,9 +1298,76 @@ export default function WarrantyDashboard() {
                         </label>
                       </div>
 
+                      {editForm?.duration_mode === 'custom' && (
+                        <div className="mt-2 grid gap-3 md:grid-cols-2">
+                          <label className="text-sm text-gray-600">
+                            จำนวน (วัน/เดือน)
+                            <input
+                              inputMode="numeric"
+                              value={editForm?.custom_value ?? ''}
+                              onChange={e =>
+                                setEditForm(f => {
+                                  const next = { ...f, custom_value: e.target.value }
+                                  if (!manualExpiry) {
+                                    next.expiry_date = computeExpiry(next.purchase_date, {
+                                      unit: f.custom_unit || 'months',
+                                      value: Number(e.target.value || 0),
+                                    })
+                                  }
+                                  return next
+                                })
+                              }
+                              className="mt-1 w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                              placeholder="เช่น 45"
+                              type="number"
+                              min="1"
+                            />
+                          </label>
+                          <label className="text-sm text-gray-600">
+                            หน่วย
+                            <div className="mt-1 flex h-[42px] items-center gap-3 rounded-2xl border border-sky-100 bg-sky-50/60 px-3">
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name="unit-edit"
+                                  checked={editForm?.custom_unit === 'days'}
+                                  onChange={() =>
+                                    setEditForm(f => {
+                                      const next = { ...f, custom_unit: 'days' }
+                                      if (!manualExpiry && f.purchase_date && f.custom_value) {
+                                        next.expiry_date = computeExpiry(f.purchase_date, { unit: 'days', value: Number(f.custom_value) })
+                                      }
+                                      return next
+                                    })
+                                  }
+                                />
+                                วัน
+                              </label>
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name="unit-edit"
+                                  checked={editForm?.custom_unit === 'months'}
+                                  onChange={() =>
+                                    setEditForm(f => {
+                                      const next = { ...f, custom_unit: 'months' }
+                                      if (!manualExpiry && f.purchase_date && f.custom_value) {
+                                        next.expiry_date = computeExpiry(f.purchase_date, { unit: 'months', value: Number(f.custom_value) })
+                                      }
+                                      return next
+                                    })
+                                  }
+                                />
+                                เดือน
+                              </label>
+                            </div>
+                          </label>
+                        </div>
+                      )}
+
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <label className="text-sm text-gray-600">
-                          วันเริ่ม
+                          วันเริ่มการรับประกัน
                           <input
                             name="purchase_date"
                             value={editForm?.purchase_date ?? ''}
@@ -1224,7 +1375,13 @@ export default function WarrantyDashboard() {
                               const v = e.target.value
                               setEditForm(f => {
                                 const next = { ...f, purchase_date: v }
-                                if (!manualExpiry) next.expiry_date = computeExpiry(v, next.duration_months)
+                                if (!manualExpiry) {
+                                  if (next.duration_mode === 'custom' && next.custom_value) {
+                                    next.expiry_date = computeExpiry(v, { unit: next.custom_unit || 'months', value: Number(next.custom_value || 0) })
+                                  } else {
+                                    next.expiry_date = computeExpiry(v, next.duration_months)
+                                  }
+                                }
                                 return next
                               })
                             }}
@@ -1301,12 +1458,12 @@ export default function WarrantyDashboard() {
                           </label>
 
                           <label className="mt-3 text-sm text-gray-600 block">
-                            ชื่อสินค้า
+                            ชื่อสินค้าที่ทำการซ่อม
                             <input
                               value={it.product_name}
                               onChange={e => patchItem(idx, { product_name: e.target.value })}
                               className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                              placeholder="กรอกชื่อสินค้า"
+                              placeholder="กรอกชื่อสินค้าที่ทำการซ่อม"
                               type="text"
                               required
                             />
@@ -1314,27 +1471,35 @@ export default function WarrantyDashboard() {
 
                           {/* ✅ รุ่น (Model) ต่อรายการ — ไม่แชร์กันทั้งใบ */}
                           <label className="mt-3 text-sm text-gray-600 block">
-                            รุ่นสินค้า
+                            รุ่นสินค้าที่ทำการซ่อม
                             <input
                               value={it.model}
                               onChange={e => patchItem(idx, { model: e.target.value })}
                               className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                              placeholder="กรอกรุ่นสินค้า"
+                              placeholder="กรอกรุ่นสินค้าที่ทำการาซ่อม"
                               type="text"
                             />
                           </label>
 
                           <div className="mt-3 grid gap-3 md:grid-cols-2">
                             <label className="text-sm text-gray-600 block">
-                              ระยะเวลาการรับประกัน (เดือน)
+                              ระยะเวลาการรับประกัน 
                               <select
-                                value={it.duration_months}
-                                onChange={e => patchItem(idx, { duration_months: Number(e.target.value || 12) })}
+                                value={it.duration_mode === 'preset' ? it.duration_months : 'other'}
+                                onChange={e => {
+                                  const v = e.target.value
+                                  if (v === 'other') {
+                                    patchItem(idx, { duration_mode: 'custom', custom_unit: 'months', custom_value: 12 })
+                                  } else {
+                                    patchItem(idx, { duration_mode: 'preset', duration_months: Number(v || 12) })
+                                  }
+                                }}
                                 className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
                               >
                                 {[1,3,6, 12, 18, 24].map(month => (
                                   <option key={month} value={month}>{month} เดือน</option>
                                 ))}
+                                <option value="other">อื่นๆ (ระบุเอง)</option>
                               </select>
                             </label>
 
@@ -1351,9 +1516,49 @@ export default function WarrantyDashboard() {
                             </label>
                           </div>
 
+                          {it.duration_mode === 'custom' && (
+                            <div className="mt-2 grid gap-3 md:grid-cols-2">
+                              <label className="text-sm text-gray-600 block">
+                                จำนวน (วัน/เดือน)
+                                <input
+                                  inputMode="numeric"
+                                  value={it.custom_value}
+                                  onChange={e => patchItem(idx, { custom_value: e.target.value })}
+                                  className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
+                                  placeholder="เช่น 45"
+                                  type="number"
+                                  min="1"
+                                />
+                              </label>
+                              <label className="text-sm text-gray-600 block">
+                                หน่วย
+                                <div className="mt-1 flex h-[42px] items-center gap-3 rounded-2xl border border-sky-100 bg-white px-3">
+                                  <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                      type="radio"
+                                      name={`unit-${idx}`}
+                                      checked={it.custom_unit === 'days'}
+                                      onChange={() => patchItem(idx, { custom_unit: 'days' })}
+                                    />
+                                    วัน
+                                  </label>
+                                  <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                      type="radio"
+                                      name={`unit-${idx}`}
+                                      checked={it.custom_unit === 'months'}
+                                      onChange={() => patchItem(idx, { custom_unit: 'months' })}
+                                    />
+                                    เดือน
+                                  </label>
+                                </div>
+                              </label>
+                            </div>
+                          )}
+
                           <div className="mt-3 grid gap-3 md:grid-cols-2">
                             <label className="text-sm text-gray-600 block">
-                              วันที่ซื้อสินค้า
+                              วันที่เริ่มรับประกัน
                               <input
                                 value={it.purchase_date}
                                 onChange={e => patchItem(idx, { purchase_date: e.target.value })}

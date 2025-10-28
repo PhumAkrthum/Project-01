@@ -19,35 +19,86 @@ const STATUS_METADATA = {
 
 const MS_IN_DAY = 1000 * 60 * 60 * 24;
 
-function parseDate(value) {
+/* ===================== UTC Date-only helpers ===================== */
+
+function dateOnlyUTCFromYMD(ymd) {
+  // ymd: 'YYYY-MM-DD'
+  if (typeof ymd !== "string") return null;
+  const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  return new Date(Date.UTC(y, mo, d));
+}
+
+function toDateOnlyUTC(value) {
+  // รับ string/date/timestamp -> คืน Date ที่ 00:00:00Z
   if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
+
+  if (typeof value === "string") {
+    const dOnly = dateOnlyUTCFromYMD(value);
+    if (dOnly) return dOnly;
+  }
+
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+function addMonthsUTC(dateOnlyUTC, months) {
+  // บวกเดือนแบบ UTC พร้อม clamp วันปลายเดือน
+  const y = dateOnlyUTC.getUTCFullYear();
+  const m = dateOnlyUTC.getUTCMonth();
+  const day = dateOnlyUTC.getUTCDate();
+
+  const head = new Date(Date.UTC(y, m + Number(months || 0), 1));
+  const lastDay = new Date(Date.UTC(head.getUTCFullYear(), head.getUTCMonth() + 1, 0)).getUTCDate();
+  const safeDay = Math.min(day, lastDay);
+
+  return new Date(Date.UTC(head.getUTCFullYear(), head.getUTCMonth(), safeDay));
+}
+
+function diffDaysUTC(a, b) {
+  // ต่างวันแบบ UTC (ปัดให้เป็นจำนวนวันเต็ม)
+  const A = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate());
+  const B = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate());
+  return Math.ceil((B - A) / MS_IN_DAY);
+}
+
+/* ===================== เดิมแต่ทำให้ UTC-safe ===================== */
+
+function parseDate(value) {
+  // รักษาชื่อเดิม แต่ให้คืน "UTC date-only"
+  return toDateOnlyUTC(value);
 }
 
 function computeExpiryDate(purchaseDate, durationMonths, explicitExpiry) {
   const expiry = parseDate(explicitExpiry);
   if (expiry) return expiry;
+
   const purchase = parseDate(purchaseDate);
   if (!purchase || durationMonths == null) return null;
-  const result = new Date(purchase.getTime());
-  result.setMonth(result.getMonth() + Number(durationMonths));
-  return result;
+
+  return addMonthsUTC(purchase, Number(durationMonths));
 }
 
 function computeDurationDays(purchaseDate, expiryDate) {
   const purchase = parseDate(purchaseDate);
   const expiry = parseDate(expiryDate);
   if (!purchase || !expiry) return null;
-  const diff = Math.ceil((expiry - purchase) / MS_IN_DAY);
+  const diff = diffDaysUTC(purchase, expiry);
   return diff > 0 ? diff : 0;
 }
 
 function toISODate(date) {
-  const parsed = parseDate(date);
-  if (!parsed) return null;
-  return parsed.toISOString().slice(0, 10);
+  const d = parseDate(date);
+  if (!d) return null;
+  // สร้าง 'YYYY-MM-DD' จากค่า UTC
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export function determineWarrantyStatus(expiryDate, notifyDays = 14) {
@@ -59,8 +110,8 @@ export function determineWarrantyStatus(expiryDate, notifyDays = 14) {
       ...STATUS_METADATA.unknown,
     };
   }
-  const today = new Date();
-  const diffDays = Math.ceil((expiry - today) / MS_IN_DAY);
+  const today = toDateOnlyUTC(new Date());
+  const diffDays = diffDaysUTC(today, expiry);
 
   if (diffDays < 0) {
     return {
@@ -89,7 +140,9 @@ export function buildWarrantyPersistenceData(payload) {
   const purchaseDate = parseDate(payload.purchase_date);
   if (!purchaseDate) throw new Error("Invalid purchase date");
 
-  let durationMonths = payload.duration_months != null ? Number(payload.duration_months) : null;
+  let durationMonths =
+    payload.duration_months != null ? Number(payload.duration_months) : null;
+
   const expiryDate = computeExpiryDate(purchaseDate, durationMonths, payload.expiry_date);
   const durationDays = computeDurationDays(purchaseDate, expiryDate);
 
@@ -109,8 +162,8 @@ export function buildWarrantyPersistenceData(payload) {
     customerPhone: normalize(payload.customer_phone),
     productName: payload.product_name.trim(),
     serial: normalize(payload.serial),
-    purchaseDate,
-    expiryDate,
+    purchaseDate,          // Date @ 00:00Z
+    expiryDate,            // Date @ 00:00Z (หรือ null)
     durationMonths,
     durationDays,
     coverageNote: payload.warranty_terms.trim(),
@@ -121,7 +174,7 @@ export function buildWarrantyPersistenceData(payload) {
 export function mapWarrantyForResponse(warranty, { notifyDaysInAdvance = 14 } = {}) {
   if (!warranty) return null;
   const status = determineWarrantyStatus(warranty.expiryDate, notifyDaysInAdvance);
-  
+
   // Parse images from JSON
   let images = [];
   try {
@@ -129,10 +182,10 @@ export function mapWarrantyForResponse(warranty, { notifyDaysInAdvance = 14 } = 
       images = JSON.parse(warranty.images);
     }
   } catch (error) {
-    console.error('Error parsing warranty images:', error);
+    console.error("Error parsing warranty images:", error);
     images = [];
   }
-  
+
   return {
     id: warranty.id,
     storeId: warranty.storeId,

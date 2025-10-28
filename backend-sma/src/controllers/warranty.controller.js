@@ -1,4 +1,3 @@
-// backend-sma/src/controllers/warranty.controller.js
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
@@ -12,13 +11,22 @@ function currentStoreId(req) {
   return Number.isInteger(id) ? id : null;
 }
 
+// ---------- UTC-safe helpers ----------
+function dateOnlyUTC(v) {
+  const d = v instanceof Date ? v : new Date(v);
+  if (isNaN(d)) return null;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
 function daysBetween(a, b) {
-  return Math.ceil((b.getTime() - a.getTime()) / (24 * 3600 * 1000));
+  const A = dateOnlyUTC(a);
+  const B = dateOnlyUTC(b);
+  if (!A || !B) return 0;
+  return Math.ceil((B.getTime() - A.getTime()) / (24 * 3600 * 1000));
 }
 
 function statusForItem(item, notifyDays) {
-  const today = new Date();
-  const exp = item.expiryDate ? new Date(item.expiryDate) : null;
+  const today = dateOnlyUTC(new Date());
+  const exp = item.expiryDate ? dateOnlyUTC(item.expiryDate) : null;
 
   let statusCode = "active";
   let statusTag = "ใช้งานได้";
@@ -209,12 +217,12 @@ export async function downloadWarrantyPdf(req, res) {
       cell(left + colL, y, colR, rowH2, "หมายเลขเครื่อง", "Serial No.", item.serialNumber);
       y += rowH2;
 
-      // เตรียมวันที่
+      // เตรียมวันที่ (UTC)
       const purchaseTxt = item.purchaseDate
-        ? new Date(item.purchaseDate).toLocaleDateString("th-TH")
+        ? dateOnlyUTC(item.purchaseDate).toLocaleDateString("th-TH", { timeZone: "UTC" })
         : "-";
       const expiryTxt = item.expiryDate
-        ? new Date(item.expiryDate).toLocaleDateString("th-TH")
+        ? dateOnlyUTC(item.expiryDate).toLocaleDateString("th-TH", { timeZone: "UTC" })
         : "-";
 
       // แถว 3 — วันที่ซื้อ / วันหมดอายุ (แยกสองช่อง)

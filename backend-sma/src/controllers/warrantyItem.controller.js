@@ -1,4 +1,3 @@
-// backend-sma/src/controllers/warrantyItem.controller.js
 import { prisma } from '../db/prisma.js';
 import fs from 'fs';
 import path from 'path';
@@ -8,20 +7,44 @@ const publicBase =
   (process.env.APP_URL && process.env.APP_URL.replace(/\/+$/, '')) ||
   `http://localhost:${process.env.PORT || 4000}`;
 
-/* ---------- helpers ---------- */
+/* ---------- helpers (UTC-safe) ---------- */
 function toDateOnly(v) {
+  // คืนค่า Date ที่เวลา 00:00:00 **UTC** เสมอ (หรือ null ถ้าพาร์สไม่ได้)
   if (!v) return null;
+
+  // กรณีได้ string รูปแบบ 'YYYY-MM-DD'
+  if (typeof v === 'string') {
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
+      return new Date(Date.UTC(y, mo, d));
+    }
+  }
+
+  // กรณีได้ Date / timestamp / string อื่น ๆ → แปลงเป็น Date แล้วปัดเป็น "วัน" แบบ UTC
   const d = new Date(v);
   if (isNaN(d)) return null;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 function addMonths(date, m) {
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + m);
-  return d;
+  // รับ Date (ที่ควรเป็น 00:00 UTC) แล้วบวกเดือนแบบ UTC พร้อม clamping วันปลายเดือน
+  const y = date.getUTCFullYear();
+  const mo = date.getUTCMonth();
+  const day = date.getUTCDate();
+
+  // ไปต้นเดือนของเดือนเป้าหมาย (UTC)
+  const head = new Date(Date.UTC(y, mo + Number(m || 0), 1));
+  // หาวันสุดท้ายของเดือนเป้าหมาย
+  const lastDay = new Date(Date.UTC(head.getUTCFullYear(), head.getUTCMonth() + 1, 0)).getUTCDate();
+  const safeDay = Math.min(day, lastDay);
+
+  return new Date(Date.UTC(head.getUTCFullYear(), head.getUTCMonth(), safeDay));
 }
 function daysBetween(a, b) {
-  return Math.ceil((b.getTime() - a.getTime()) / (24 * 3600 * 1000));
+  // นับต่างกันเป็น "จำนวนวัน" โดยยึด 00:00 UTC ทั้งคู่
+  const A = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate());
+  const B = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate());
+  return Math.ceil((B - A) / (24 * 3600 * 1000));
 }
 
 /* ---------- เพิ่มรูปให้ WarrantyItem (many files) ---------- */

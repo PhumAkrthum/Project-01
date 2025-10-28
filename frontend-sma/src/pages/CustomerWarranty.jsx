@@ -13,17 +13,29 @@ const FILTERS = [
   { value: "expired", label: "หมดอายุ" },
 ];
 
-const fmtDate = (d) => {
-  if (!d) return "-";
-  try {
-    return new Date(d).toLocaleDateString("th-TH", {
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-    });
-  } catch {
-    return String(d).slice(0, 10);
+// ✅ helper: ปัดให้เป็น "UTC date-only" เสมอ
+const dateOnlyUTC = (v) => {
+  if (!v) return null;
+  if (typeof v === "string") {
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
+      return new Date(Date.UTC(y, mo, d));
+    }
   }
+  const d = v instanceof Date ? v : new Date(v);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+};
+
+// ✅ แปลงเป็น YYYY-MM-DD เสมอ (UTC)
+const fmtDate = (d) => {
+  const u = dateOnlyUTC(d);
+  if (!u) return "-";
+  const y = u.getUTCFullYear();
+  const m = String(u.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(u.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 };
 
 function absolutize(p) {
@@ -46,9 +58,22 @@ function firstImageSrc(images) {
 
 function calcDaysLeft(expiryDate) {
   if (!expiryDate) return null;
-  const today = new Date();
-  const exp = new Date(expiryDate);
-  return Math.ceil((exp - today) / (24 * 3600 * 1000));
+  const todayUTC = dateOnlyUTC(new Date());     // ✅ ใช้ UTC date-only
+  const expUTC = dateOnlyUTC(expiryDate);       // ✅ ใช้ UTC date-only
+  if (!todayUTC || !expUTC) return null;
+  return Math.ceil(
+    (Date.UTC(
+      expUTC.getUTCFullYear(),
+      expUTC.getUTCMonth(),
+      expUTC.getUTCDate()
+    ) -
+      Date.UTC(
+        todayUTC.getUTCFullYear(),
+        todayUTC.getUTCMonth(),
+        todayUTC.getUTCDate()
+      )) /
+      (24 * 3600 * 1000)
+  );
 }
 
 function deriveItemStatusCode(item, notifyDays = 14) {
@@ -544,8 +569,7 @@ export default function CustomerWarranty() {
                 rows={5}
                 value={noteModal.note}
                 onChange={(e) =>
-                  setNoteModal({ ...noteModal, note: e.target.value })
-                }
+                  setNoteModal({ ...noteModal, note: e.target.value })}
                 className="w-full rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-sm text-slate-900 focus:border-sky-300 focus:outline-none"
                 placeholder="พิมพ์หมายเหตุของคุณ"
               />
