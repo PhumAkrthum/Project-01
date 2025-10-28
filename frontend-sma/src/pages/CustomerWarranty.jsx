@@ -399,9 +399,7 @@ export default function CustomerWarranty() {
                                       ({daysLeft} วัน)
                                     </span>
                                   )}
-                                  <span className="text-xs text-slate-400">
-                                    #{it.id}
-                                  </span>
+                                  
                                 </div>
 
                                 <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">

@@ -7,13 +7,25 @@ import * as warrantyCtrl from './warranty.controller.js'
  * Utilities
  * ========================= */
 
-// ใช้ JS ล้วน ๆ ไม่พึ่ง date-fns
+// UTC-safe date-only helper
+function dateOnlyUTC(v) {
+  if (!v) return null
+  const d = v instanceof Date ? v : new Date(v)
+  if (isNaN(d)) return null
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+}
+
+// ใช้สูตร UTC date-only + Math.ceil ให้ตรงกับฝั่งร้าน/หน้ารายการอื่น ๆ
 function statusFromDate(expiryDate, notifyDays = 30) {
-  if (!expiryDate) return { status: 'active', daysLeft: null }
+  const exp = dateOnlyUTC(expiryDate)
+  if (!exp) return { status: 'active', daysLeft: null }
+
+  const today = dateOnlyUTC(new Date())
   const ONE_DAY = 24 * 60 * 60 * 1000
-  const daysLeft = Math.floor((new Date(expiryDate) - Date.now()) / ONE_DAY)
+  const daysLeft = Math.ceil((exp.getTime() - today.getTime()) / ONE_DAY)
+
   if (daysLeft < 0) return { status: 'expired', daysLeft }
-  if (daysLeft <= notifyDays) return { status: 'nearing_expiration', daysLeft }
+  if (daysLeft <= (notifyDays ?? 30)) return { status: 'nearing_expiration', daysLeft }
   return { status: 'active', daysLeft }
 }
 

@@ -909,11 +909,11 @@ export default function WarrantyDashboard() {
                                     <div className="flex flex-wrap items-center gap-3">
                                       <div className="text-base font-semibold text-slate-900">{it.productName}</div>
                                       <StatusBadge label={it.statusTag} className={it.statusColor} />
-                                      <span className="text-xs text-slate-400">#{it.id}</span>
+                                      
                                     </div>
                                     <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
                                       <div>Serial No.: <span className="font-medium text-slate-900">{it.serial || '-'}</span></div>
-                                      <div>วันที่ซ่อม: <span className="font-medium text-slate-900">{it.purchaseDate || '-'}</span></div>
+                                      <div>วันที่เริ่มรับประกัน: <span className="font-medium text-slate-900">{it.purchaseDate || '-'}</span></div>
                                       <div>วันหมดอายุ: <span className="font-medium text-slate-900">{it.expiryDate || '-'}</span></div>
                                       <div>จำนวนวันคงเหลือ: <span className="font-medium text-slate-900">{it.daysLeft ?? 0} วัน</span></div>
                                       <div>รุ่น: <span className="font-medium text-slate-900">{it.model || '-'}</span></div>
@@ -1324,7 +1324,7 @@ export default function WarrantyDashboard() {
                             />
                           </label>
                           <label className="text-sm text-gray-600">
-                            หน่วย
+                            รูปแบบเวลา
                             <div className="mt-1 flex h-[42px] items-center gap-3 rounded-2xl border border-sky-100 bg-sky-50/60 px-3">
                               <label className="flex items-center gap-2 text-sm">
                                 <input
@@ -1476,7 +1476,7 @@ export default function WarrantyDashboard() {
                               value={it.model}
                               onChange={e => patchItem(idx, { model: e.target.value })}
                               className="mt-1 w-full rounded-2xl border border-sky-100 bg-white px-4 py-2 text-sm text-gray-900 focus:border-sky-300 focus:outline-none"
-                              placeholder="กรอกรุ่นสินค้าที่ทำการาซ่อม"
+                              placeholder="กรอกรุ่นสินค้าที่ทำการซ่อม"
                               type="text"
                             />
                           </label>
@@ -1531,7 +1531,7 @@ export default function WarrantyDashboard() {
                                 />
                               </label>
                               <label className="text-sm text-gray-600 block">
-                                หน่วย
+                                รูปแบบเวลา
                                 <div className="mt-1 flex h-[42px] items-center gap-3 rounded-2xl border border-sky-100 bg-white px-3">
                                   <label className="flex items-center gap-2 text-sm">
                                     <input
