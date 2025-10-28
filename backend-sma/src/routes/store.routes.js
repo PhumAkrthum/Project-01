@@ -97,7 +97,7 @@ router.post("/:storeId/change-password", changeStorePassword);
  * /store/{storeId}/warranties:
  *   post:
  *     tags: [Store]
- *     summary: สร้างใบรับประกัน (รองรับหลายรายการภายในใบเดียว)
+ *     summary: สร้างใบรับประกัน (รองรับสินค้าหลายรายการภายในใบเดียว)
  *     description: สร้างใบรับประกันใหม่ โดยส่ง items เป็นอาเรย์ของรายการสินค้า (การอัปโหลดรูปจะทำภายหลังใน endpoint ของ item)
  *     security: [{ bearerAuth: [] }]
  *     parameters:

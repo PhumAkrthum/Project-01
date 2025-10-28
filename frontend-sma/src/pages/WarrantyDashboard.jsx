@@ -628,7 +628,7 @@ export default function WarrantyDashboard() {
 
             <div className="flex items-center gap-3" ref={profileMenuRef}>
               <IconButton icon="🔔" label="การแจ้งเตือน" />
-              <IconButton icon="📅" label="กิจกรรม" />
+              
               <button
                 type="button"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}

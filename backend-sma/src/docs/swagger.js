@@ -115,7 +115,7 @@ const options = {
       },
     },
   },
-  // ให้ค้นคอมเมนต์ JSDoc ในไฟล์ route/controller (เพียงพอแล้ว ไม่ต้องแก้)
+  
   apis: ['./src/routes/**/*.js', './src/controllers/**/*.js'],
 };
 

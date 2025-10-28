@@ -19,7 +19,7 @@ router.use(requireAuth, requireVerified, requireStore);
  * /warranties/{warrantyId}:
  *   get:
  *     tags: [Warranty]
- *     summary: อ่านข้อมูลระดับ "ใบรับประกัน"
+ *     summary: อ่านข้อมูลของใบรับประกัน
  *     description: คืนข้อมูล header ของใบรับประกันตาม warrantyId
  *     security: [{ bearerAuth: [] }]
  *     parameters:

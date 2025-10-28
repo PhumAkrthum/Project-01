@@ -15,11 +15,21 @@ export default function CustomerNavbar() {
   const menuRef = useRef(null);
   const notifRef = useRef(null);
 
+  // 🔔 การแจ้งเตือน
   const [notifications, setNotifications] = useState([
-    { id: 1, message: "ใบรับประกัน WR002 ใกล้หมดอายุ", type: "warning" },
-    { id: 2, message: "ใบรับประกัน WR001 หมดอายุแล้ว", type: "expired" },
+    { id: 1, message: "ใบรับประกัน WR002 ใกล้หมดอายุ", type: "warning", read: false },
+    { id: 2, message: "ใบรับประกัน WR001 หมดอายุแล้ว", type: "expired", read: false },
   ]);
 
+  // 🟦 นับเฉพาะที่ยังไม่อ่าน
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // ✅ ทำเครื่องหมายว่าอ่านแล้ว
+  function markAllAsRead() {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }
+
+  // ปิด dropdown เมื่อคลิกข้างนอก
   useEffect(() => {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
@@ -159,13 +169,16 @@ export default function CustomerNavbar() {
             <div className="relative" ref={notifRef}>
               <button
                 title="การแจ้งเตือน"
-                onClick={() => setOpenNotif((v) => !v)}
+                onClick={() => {
+                  setOpenNotif((v) => !v);
+                  if (!openNotif) markAllAsRead();
+                }}
                 className="grid h-9 w-9 place-items-center rounded-full bg-white shadow ring-1 ring-sky-100 text-sky-600 hover:bg-sky-50 transition"
               >
                 <span className="text-lg">🔔</span>
-                {notifications.length > 0 && (
+                {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 text-[10px] text-white">
-                    {notifications.length}
+                    {unreadCount}
                   </span>
                 )}
               </button>
@@ -173,8 +186,14 @@ export default function CustomerNavbar() {
               {/* Dropdown แจ้งเตือน */}
               {openNotif && (
                 <div className="absolute right-0 top-12 w-72 rounded-2xl border border-sky-100 bg-white shadow-xl overflow-hidden z-[1200]">
-                  <div className="border-b border-sky-50 bg-sky-50/60 px-4 py-2 text-sm font-semibold text-sky-800">
-                    การแจ้งเตือน
+                  <div className="flex items-center justify-between border-b border-sky-50 bg-sky-50/60 px-4 py-2 text-sm font-semibold text-sky-800">
+                    <span>การแจ้งเตือน</span>
+                    <button
+                      onClick={markAllAsRead}
+                      className="text-sky-600 hover:underline text-xs font-normal"
+                    >
+                      ทำเครื่องหมายว่าอ่านแล้ว
+                    </button>
                   </div>
                   <div className="max-h-64 overflow-y-auto">
                     {notifications.length === 0 ? (
@@ -185,13 +204,13 @@ export default function CustomerNavbar() {
                       notifications.map((n) => (
                         <div
                           key={n.id}
-                          className={`px-4 py-3 text-sm border-b last:border-0 ${
+                          className={`px-4 py-3 text-sm border-b last:border-0 transition ${
                             n.type === "warning"
                               ? "bg-amber-50 text-amber-800"
                               : n.type === "expired"
                               ? "bg-rose-50 text-rose-700"
                               : "bg-white text-slate-700"
-                          }`}
+                          } ${n.read ? "opacity-70" : "font-semibold"}`}
                         >
                           {n.message}
                         </div>
@@ -202,7 +221,7 @@ export default function CustomerNavbar() {
               )}
             </div>
 
-            {/* 🧍 กล่องโปรไฟล์ธีมฟ้า */}
+            {/* 🧍 กล่องโปรไฟล์ */}
             <div
               ref={menuRef}
               onClick={() => setOpenMenu((v) => !v)}
@@ -318,7 +337,10 @@ export default function CustomerNavbar() {
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
                         value={profile.firstName}
                         onChange={(e) =>
-                          setProfile((s) => ({ ...s, firstName: e.target.value }))
+                          setProfile((s) => ({
+                            ...s,
+                            firstName: e.target.value,
+                          }))
                         }
                         placeholder="ชื่อ"
                       />
@@ -331,7 +353,10 @@ export default function CustomerNavbar() {
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
                         value={profile.lastName}
                         onChange={(e) =>
-                          setProfile((s) => ({ ...s, lastName: e.target.value }))
+                          setProfile((s) => ({
+                            ...s,
+                            lastName: e.target.value,
+                          }))
                         }
                         placeholder="นามสกุล"
                       />

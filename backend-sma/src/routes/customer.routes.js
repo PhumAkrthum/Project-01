@@ -48,7 +48,7 @@ router.get(
  * /customer/profile:
  *   patch:
  *     tags: [Customer]
- *     summary: แก้ไขโปรไฟล์ลูกค้า
+ *     summary: แก้ไขข้อมูลลูกค้า(ยกเว้นอีเมล)
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -108,7 +108,7 @@ router.patch(
  * /customer/warranties:
  *   get:
  *     tags: [Customer]
- *     summary: ลูกค้าดึงใบรับประกันของตัวเอง (รองรับค้นหา/ฟิลเตอร์)
+ *     summary: ลูกค้าดึงใบรับประกันของตัวเอง (ค้นหา/ฟิลเตอร์)
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: query
